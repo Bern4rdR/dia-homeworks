@@ -4,6 +4,9 @@ global {
 	float step <- 1 #s;
 	float min_speed <- 0.5 #m / #s;
 	float max_speed <- 3.0 #m / #s;
+	float max_degrade <- 1.4;
+	float ht_threshold <- 2.0;
+	float max_ht <- 30.0;
 	
 	int num_people <- 10;
 	// graph festival_grounds;
@@ -45,28 +48,32 @@ species building skills: [fipa] {
 species people skills: [moving, fipa] {
 	rgb color <- #yellow ;
 	building information_center;
-	bool hungry;
-	bool thirsty;
+	float hungry <- 10.0;
+	float thirsty <- 10.0;
 	point target_dest <- nil;
+	
+	bool isHungry {
+		return hungry < ht_threshold;
+	}
+	
+	bool isThirsty {
+		return thirsty < ht_threshold;
+	}
 	
 	reflex every_tick when: target_dest = nil {
 		if target_dest = nil {
-			do wander amplitude: 1.0;
+			do wander;
 		}
-		if !hungry {
-			hungry <- flip(0.1);
-		}
-		if !thirsty {
-			thirsty <- flip(0.1);
-		}
+		hungry <- hungry - rnd(max_degrade);
+		thirsty <- thirsty - rnd(max_degrade);
 		
 		// refresh color
-		if target_dest != nil {
+		if target_dest = nil {
 			color <- #yellow;
 		}
 	}
 	
-	reflex find_building when: (hungry or thirsty) and target_dest = nil {
+	reflex find_building when: (isHungry() or isThirsty()) and target_dest = nil {
 		target_dest <- any_location_in(information_center);
 		color <- #orange;
 	}
@@ -77,17 +84,17 @@ species people skills: [moving, fipa] {
 		if location = any_location_in(information_center) {
 			color <- #green;
 			ask information_center {
-				myself.target_dest <- any_location_in(one_of(self.stands where (each.type=(myself.hungry ? "Food" : "Drinks"))));
+				myself.target_dest <- any_location_in(one_of(self.stands where (each.type=(myself.isHungry() ? "Food" : "Drinks"))));
 			}
 		}
 		else if location distance_to target_dest < 1.0 {
 			ask building {
 				if self.type = "Food" {
-					myself.hungry <- false;
+					myself.hungry <- max_ht;
 					myself.target_dest <- nil;
 				}
 				else if self.type = "Drinks" {
-					myself.thirsty <- false;
+					myself.thirsty <- max_ht;
 					myself.target_dest <- nil;
 				}
 			}
