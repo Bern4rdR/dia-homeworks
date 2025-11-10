@@ -18,7 +18,6 @@ global {
 		}
 		list<building> stands_b <- building where (each.type != "Information");
 		
-		
 		create building {
 			type <- "Information";
 			color <- #blue;
@@ -28,8 +27,6 @@ global {
 		
 		create people number: num_people {
 			speed <- rnd(min_speed, max_speed);
-			hungry <- false;
-			thirsty <- false;
 			information_center <- one_of(information_centers);		
 		}
 	}
@@ -81,10 +78,12 @@ species people skills: [moving, fipa] {
 	reflex move when: target_dest != nil {
 		do goto target: target_dest;
 		
-		if location = any_location_in(information_center) {
-			color <- #green;
+		if location distance_to any_location_in(information_center) < 1.0 {
+			color <- isHungry() ? #brown : #green;
 			ask information_center {
+				write "Hungry/Thirsty: " + myself.isHungry() + " " + myself.isThirsty();
 				myself.target_dest <- any_location_in(one_of(self.stands where (each.type=(myself.isHungry() ? "Food" : "Drinks"))));
+				write "Target destination: " + myself.target_dest;
 			}
 		}
 		else if location distance_to target_dest < 1.0 {
