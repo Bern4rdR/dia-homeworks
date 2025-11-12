@@ -6,7 +6,7 @@ global {
 	float max_speed <- 3.0 #m / #s;
 	float max_degrade <- 1.4;
 	float ht_threshold <- 2.0;
-	float max_ht <- 30.0;
+	float max_ht <- 100.0;
 	int num_security <- 3;
 	
 	int num_people <- 10;
