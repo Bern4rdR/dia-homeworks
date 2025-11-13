@@ -12,6 +12,8 @@ global {
 	int num_people <- 10;
 	int num_evil <- 1;
 	int num_stands <- 4;
+	float evil_distance <- 5.0;
+	bool random_path <- true;
 	
 	init {
 		create building number: num_stands {
@@ -50,7 +52,7 @@ species building{
 	list<building> stands;
 	
 	aspect base {
-		draw circle(3) color: color ;
+		draw square(2) color: color ;
 	}
 	
 	// TODO: notify security when receiving info
@@ -64,6 +66,8 @@ species people skills: [moving] {
 	point target_dest <- nil;
 	bool notify_evil <- false;
 	point evil_location <- nil;
+	float evil_time;
+	
 	
 	
 	bool isHungry {
@@ -81,10 +85,13 @@ species people skills: [moving] {
 			// should agents die if they reach 0?	
 	}
 	
-	reflex find_evil when: (!notify_evil and any(evil_people at_distance(5))) {
-    write "Evil nearby!";
+	reflex find_evil when: (!notify_evil and any(evil_people at_distance(evil_distance))) {
+    write "Evil nearby"+ self.location +"!";
     notify_evil <- true;
     evil_location <- self.location;
+    target_dest <- information_center.location;
+    evil_time <- time;
+    
     color <- #orange;
 }
 		
@@ -105,9 +112,18 @@ species people skills: [moving] {
 				// self.notify_security()
 				notify_evil <- false;
 				color <- #yellow;
-				security_people security <- one_of(security_people);
+				write "Evil reported at "+ evil_location + "after " + (time - evil_time) +"!";
+				security_people security;
+				if (random_path){
+					security <- one_of(security_people);
+				}
+				else {
+					security <- security_people closest_to evil_location;
+				}
+		
 				ask security{
 					self.target_dest <- myself.evil_location;
+					write "Security at "+self.location+ "going to "+self.target_dest;
 				}
 			} else {
 //				color <- type = "Evil" ? #red : #green;
@@ -139,32 +155,41 @@ species people skills: [moving] {
 
 species evil_people parent: people {
 	
-	bool is_evil <- true;
-	
 	rgb color <- #red;
 	
 // This empty function cancels the reflex for subclass.
 	reflex find_evil when: false {}
 	}
 	
-species security_people parent: people{
+species security_people parent: people {
 	rgb color <- #blue;
 	point evil_pos <- nil;
 	
 	reflex move  {
 		if (self.location = target_dest) {target_dest <- nil;}
-		if (target_dest=nil) {do wander;}
-		else {do goto target: target_dest;}
+		if (target_dest=nil) {do wander; color <- #blue;}
+		else {do goto target: target_dest; color <- #lightblue;
+			
+		}
 		
 		}
 	
 	reflex find_evil when: false {}
-	reflex kill_evil when: not empty(evil_people at_distance 5) {
-    evil_people target <- one_of(evil_people at_distance 5);
+	reflex kill_evil when: not empty(evil_people at_distance evil_distance) {
+    evil_people target <- one_of(evil_people at_distance evil_distance);
+    write "Evil died at "+ self.location +"at " +time+"!";
     ask target {
         do die;
     }
+    
+    
 }
+	aspect base {
+    draw circle(1) color: color border: #black;
+	 if target_dest != nil {
+        draw (polyline([location, target_dest])) color: #green width: 2;
+        }
+    }
 
 	
 	
@@ -177,9 +202,13 @@ experiment festival_traffic type: gui {
 	parameter "Security agents" var: num_security category: "People" min: 1 max: 3;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
 	parameter "maximal speed" var: max_speed category: "People" max: 10 #km/#h;
-	
+	parameter "Evil detection distance" var: evil_distance category: "People" min:2.0 max: 10.0 step: 0.5;
+	parameter "Use random security guard intead of closest" var: random_path category: "People";
+		
 	parameter "Number of food/drink stands" var: num_stands category: "Building" min: 4 max: 10;
+
 	
+	float minimum_cycle_duration <- 0.1;
 	output {
 		display festival_display type: 2d {
 			species building aspect: base;
