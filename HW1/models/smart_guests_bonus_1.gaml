@@ -11,7 +11,7 @@ global {
 	list<smart_person> smarties <- [];
 	float avg_dist_people <- 0.0 update: update_avg_people();
 	float avg_dist_smarties <- 0.0 update: update_smarties();
-	int num_people <- 250; // computer fan go brrrr, actually, I think past 250 the sim changes how it renders
+	int num_people <- 12; // computer fan go brrrr, actually, I think past 250 the sim changes how it renders
 	// graph festival_grounds;
 	
 	init {
@@ -192,11 +192,15 @@ species smart_person parent: people {
 	reflex find_building when: (isHungry() or isThirsty()) and target_dest = nil {
 		if isHungry() {
 			if food_stand != nil {
-				target_dest <- food_stand;
+				if rnd(1, 4) != 2 {
+					target_dest <- food_stand;
+				}
 			}
 		} else if isThirsty() {
 			if drink_stand != nil {
-				target_dest <- drink_stand;
+				if rnd(1, 4) != 2 {
+					target_dest <- drink_stand;	
+				}
 			}
 		}
 		if target_dest = nil {
