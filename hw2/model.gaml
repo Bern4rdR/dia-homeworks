@@ -1,5 +1,17 @@
 model festival_fair
 
+/*
+ * [ ] New agent type: auctioneer
+ *    [ ] pop up at least once per simulation
+ *    [ ] communicate only with FIPA
+ * [ ] Dutch auction: sell items to auction winners
+ *      - start price higher than market value
+ *      - reduce price until offer
+ *      - first bid is winner
+ *      - price goes below set limit: cancel auction
+ */
+
+
 global {
 	float step <- 1 #s;
 	float min_speed <- 0.5 #m / #s;
