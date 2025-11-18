@@ -40,13 +40,20 @@ global {
 		create people number: num_people {
 			speed <- rnd(min_speed, max_speed);
 			information_center <- one_of(information_centers);		
+			genre <- genre + one_of(["music", "videos", "legos"]);
+			if rnd(100) < 50 {
+				genre <- genre + one_of(["music", "videos", "legos"]);
+			} 
 		}
 		
-		create auctioneer {
-			list<people> visitors <- people where (each.color = #yellow);
-			participants <- visitors;
-			asking_price <- 10.0;
-			min_price <- 9.0;
+		loop gre over: ["music", "videos", "legos"] {
+			create auctioneer {
+				list<people> visitors <- people where (each.color = #yellow);
+				participants <- visitors;
+				asking_price <- 10.0;
+				min_price <- 1.0;
+				genre <- gre;
+			}
 		}
 	}
 }
@@ -69,6 +76,7 @@ species people skills: [moving, fipa] {
 	point target_dest <- nil;
 	int current_auction_id <- nil;
 	int id <- rnd(1, 10000000);
+	list<string> genre <- [];
 	
 	float acceptable_price <- rnd(5, 8.5);
 	
@@ -123,9 +131,7 @@ species people skills: [moving, fipa] {
 	
 	reflex place_bid when: !(empty(proposes)) {
 		message current_bid <- proposes at 0;
-		float price <- list(current_bid.contents) at 0;
-		write current_bid.contents;
-		
+		float price <- list(current_bid.contents) at 0;		
 		if (price <= acceptable_price) {
 			write 'I\'ll buy';
 			do accept_proposal
@@ -133,7 +139,6 @@ species people skills: [moving, fipa] {
 				contents: ['I\'ll buy', price, id]
 			;
 		} else {
-			write 'Price too high';
 			do reject_proposal
 				message: current_bid
 				contents: ['Price too high']
@@ -144,12 +149,13 @@ species people skills: [moving, fipa] {
 	reflex handle_cfp when: !(empty(cfps)) {
 		message next_cfp <- cfps at 0;
 		string type <- list(next_cfp.contents) at 0;
-		if (type = "dutch") {
-			write 'I\'ll enter the auction';
+		string auction_genre <- list(next_cfp.contents) at 2;
+		if (genre contains auction_genre) {
 			current_auction_id <- list(next_cfp.contents) at 1;
+			write 'Guest: ' + id + 'I\'ll enter the auction: ' + current_auction_id;
 			do cfp
 				message: next_cfp
-				contents: ['enter', current_auction_id]
+				contents: ['enter', current_auction_id, id]
 			;
 		}
 	}
@@ -183,6 +189,7 @@ species auctioneer skills: [fipa] {
 	bool auction_over <- false;
 	int num_participants <- 0;
 	int winner <- 0;
+	string genre;
 
 	reflex send_cfp when: (time=1) {
 		loop p over: participants {
@@ -190,21 +197,23 @@ species auctioneer skills: [fipa] {
 			to: [p]
 			protocol: 'fipa-propose'
 			performative: 'cfp'
-			contents: ["dutch", self.auction_id];
+			contents: ["dutch", self.auction_id, genre];
 		}
 		has_proposed_auction <- true;
 	}
 	
 	reflex read_cfp_response when: (!empty(cfps) and has_proposed_auction and not auction_started) {
+		list ids <- [];
 		loop ap over: cfps {
 			list cts <- list(ap.contents);
-			write cts at 0;
 			
 			if cts at 0 = 'enter' {
 				num_participants <- num_participants + 1;
+				ids <- ids + list(ap.contents) at 2;
 			}
 		}
-		write "CFPS: " + length(cfps);
+		participants <- participants where (ids contains each.id);
+		write "Auction: " + auction_id + " Participants: " + length(participants);
 		auction_started <- true;
 	}
 	// should only trigger when there are no messages to process
@@ -225,21 +234,24 @@ species auctioneer skills: [fipa] {
 				winner <- list(msg.contents) at 2;
 				auction_over <- true;			
 			}
-			write msg.contents;
+//			write msg.contents;
 			// do smthn with msg.contents
 		}
 		
 		if length(reject_proposals) = length(participants) {
+//			int rejects <- 0;
 			// next iteration of auction
-			write 'moving to next round';
+//			reject_proposals <- [];
 			loop rej over: reject_proposals {
-				write rej.contents;
+//				write rej.contents;
+				list rejects <- list(rej.contents);
 			}
-			write 'Proposals remaining: ' + length(reject_proposals);
 			asking_price <- asking_price * decr_factor;
 			if asking_price < min_price {
 				auction_over <- true;
 			}
+			write 'Auction: ' + auction_id + 'moving to next round with price: ' + asking_price;
+			
 		}
 	}
 	
