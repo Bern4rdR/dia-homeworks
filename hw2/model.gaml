@@ -46,7 +46,7 @@ global {
 			list<people> visitors <- people where (each.color = #yellow);
 			participants <- visitors;
 			asking_price <- 10.0;
-			min_price <- 1.0;
+			min_price <- 9.0;
 		}
 	}
 }
@@ -68,9 +68,9 @@ species people skills: [moving, fipa] {
 	float thirsty <- 10.0;
 	point target_dest <- nil;
 	int current_auction_id <- nil;
-	int id <- rnd(10000000);
+	int id <- rnd(1, 10000000);
 	
-	float acceptable_price <- 8.0;
+	float acceptable_price <- rnd(5, 8.5);
 	
 	bool isHungry {
 		return hungry < ht_threshold;
@@ -158,7 +158,7 @@ species people skills: [moving, fipa] {
 		message inform <- informs at 0;
 		list content <- list(inform.contents);
 		if content at 0 = 'auction over' and content at 1 = id {
-			write "Yay I won!!!!";
+			write "Yay I won!!!! " + id;
 		} else if content at 0 = 'auction over' {
 			write "Oh no I lost :(";
 		}
@@ -180,9 +180,9 @@ species auctioneer skills: [fipa] {
 	int auction_id <- rnd(10000000);
 	bool has_proposed_auction <- false;
 	bool auction_started <- false;
-	bool auction_won <- false;
+	bool auction_over <- false;
 	int num_participants <- 0;
-	int winner <- nil;
+	int winner <- 0;
 
 	reflex send_cfp when: (time=1) {
 		loop p over: participants {
@@ -221,9 +221,9 @@ species auctioneer skills: [fipa] {
 	
 	reflex read_message when: !(empty(accept_proposals) and empty(reject_proposals)) {
 		loop msg over: accept_proposals {
-			if not auction_won {
+			if not auction_over {
 				winner <- list(msg.contents) at 2;
-				auction_won <- true;			
+				auction_over <- true;			
 			}
 			write msg.contents;
 			// do smthn with msg.contents
@@ -237,11 +237,16 @@ species auctioneer skills: [fipa] {
 			}
 			write 'Proposals remaining: ' + length(reject_proposals);
 			asking_price <- asking_price * decr_factor;
+			if asking_price < min_price {
+				auction_over <- true;
+			}
 		}
 	}
 	
-	reflex inform_winner when: winner != nil and auction_won {
-		write "Winner found";
+	reflex inform_result when: auction_over {
+		if winner != 0 {
+			write "Winner found: " + winner;
+		}
 		do start_conversation
 			to: participants
 			protocol: 'fipa-propose'
@@ -251,7 +256,7 @@ species auctioneer skills: [fipa] {
 		winner <- nil;
 		has_proposed_auction <- false;
 		auction_started <- false;
-		auction_won <- false;
+		auction_over <- false;
 	}
 	
 	aspect base {
