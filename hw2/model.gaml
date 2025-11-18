@@ -1,9 +1,9 @@
 model festival_fair
 
 /*
- * [ ] New agent type: auctioneer
+ * [x] New agent type: auctioneer
  *    [ ] pop up at least once per simulation
- *    [ ] communicate only with FIPA
+ *    [x] communicate only with FIPA
  * [ ] Dutch auction: sell items to auction winners
  *      - start price higher than market value
  *      - reduce price until offer
@@ -41,6 +41,13 @@ global {
 			speed <- rnd(min_speed, max_speed);
 			information_center <- one_of(information_centers);		
 		}
+		
+		create auctioneer {
+			list<people> visitors <- people where (each.color = #yellow);
+			participants <- visitors;
+			asking_price <- 10.0;
+			min_price <- 1.0;
+		}
 	}
 }
 
@@ -60,6 +67,8 @@ species people skills: [moving, fipa] {
 	float hungry <- 10.0;
 	float thirsty <- 10.0;
 	point target_dest <- nil;
+	
+	float acceptable_price <- 8.0;
 	
 	bool isHungry {
 		return hungry < ht_threshold;
@@ -93,9 +102,7 @@ species people skills: [moving, fipa] {
 		if location distance_to any_location_in(information_center) < 1.0 {
 			color <- isHungry() ? #brown : #green;
 			ask information_center {
-				write "Hungry/Thirsty: " + myself.isHungry() + " " + myself.isThirsty();
 				myself.target_dest <- any_location_in(one_of(self.stands where (each.type=(myself.isHungry() ? "Food" : "Drinks"))));
-				write "Target destination: " + myself.target_dest;
 			}
 		}
 		else if location distance_to target_dest < 1.0 {
@@ -112,11 +119,69 @@ species people skills: [moving, fipa] {
 		}
 	}
 	
+	reflex place_bid when: !(empty(proposes)) {
+		message current_bid <- proposes at 0;
+		float price <- list(current_bid.contents) at 0;
+		write current_bid.contents;
+		
+		if (price <= acceptable_price) {
+			write 'I\'ll buy';
+			do accept_proposal
+				message: current_bid
+				contents: ['I\'ll buy', price]
+			;
+		} else {
+			write 'Price too high';
+			do reject_proposal
+				message: current_bid
+				contents: ['Price too high']
+			;
+		}
+	}
+	
 	
 	aspect base {
 		draw circle(1) color: color border: #black;
 	}
 }
+
+
+
+species auctioneer skills: [fipa] {
+	list<people> participants;
+	float asking_price;
+	float min_price;
+	float decr_factor <- 0.9; // decrement price by percent
+
+	reflex send_message when: (time=1) {
+		loop p over: participants {
+			do start_conversation 
+				to: [p]
+				protocol: 'fipa-propose'
+				performative: 'propose'
+				contents: [asking_price]
+			;
+		}
+	}
+	
+	reflex read_message when: !(empty(accept_proposals) and empty(reject_proposals)) {
+		loop msg over: accept_proposals {
+			write msg.contents;
+			// do smthn with msg.contents
+		}
+		
+		if length(reject_proposals) = length(participants) {
+			// next iteration of auction
+			write 'moving to next round';
+		}
+	}
+	
+	aspect base {
+		draw circle(2) color: #blue border: #black;
+	}
+}
+
+
 
 experiment festival_traffic type: gui {
 	parameter "Number of people agents" var: num_people category: "People" ;
