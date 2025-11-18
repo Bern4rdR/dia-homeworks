@@ -67,6 +67,8 @@ species people skills: [moving, fipa] {
 	float hungry <- 10.0;
 	float thirsty <- 10.0;
 	point target_dest <- nil;
+	int current_auction_id <- nil;
+	int id <- rnd(10000000);
 	
 	float acceptable_price <- 8.0;
 	
@@ -128,7 +130,7 @@ species people skills: [moving, fipa] {
 			write 'I\'ll buy';
 			do accept_proposal
 				message: current_bid
-				contents: ['I\'ll buy', price]
+				contents: ['I\'ll buy', price, id]
 			;
 		} else {
 			write 'Price too high';
@@ -136,6 +138,29 @@ species people skills: [moving, fipa] {
 				message: current_bid
 				contents: ['Price too high']
 			;
+		}
+	}
+	
+	reflex handle_cfp when: !(empty(cfps)) {
+		message next_cfp <- cfps at 0;
+		string type <- list(next_cfp.contents) at 0;
+		if (type = "dutch") {
+			write 'I\'ll enter the auction';
+			current_auction_id <- list(next_cfp.contents) at 1;
+			do cfp
+				message: next_cfp
+				contents: ['enter', current_auction_id]
+			;
+		}
+	}
+	
+	reflex handle_auction_end when: !(empty(informs)) {
+		message inform <- informs at 0;
+		list content <- list(inform.contents);
+		if content at 0 = 'auction over' and content at 1 = id {
+			write "Yay I won!!!!";
+		} else if content at 0 = 'auction over' {
+			write "Oh no I lost :(";
 		}
 	}
 	
@@ -152,8 +177,38 @@ species auctioneer skills: [fipa] {
 	float asking_price;
 	float min_price;
 	float decr_factor <- 0.9; // decrement price by percent
+	int auction_id <- rnd(10000000);
+	bool has_proposed_auction <- false;
+	bool auction_started <- false;
+	bool auction_won <- false;
+	int num_participants <- 0;
+	int winner <- nil;
 
-	reflex send_message when: (time=1) {
+	reflex send_cfp when: (time=1) {
+		loop p over: participants {
+			do start_conversation
+			to: [p]
+			protocol: 'fipa-propose'
+			performative: 'cfp'
+			contents: ["dutch", self.auction_id];
+		}
+		has_proposed_auction <- true;
+	}
+	
+	reflex read_cfp_response when: (!empty(cfps) and has_proposed_auction and not auction_started) {
+		loop ap over: cfps {
+			list cts <- list(ap.contents);
+			write cts at 0;
+			
+			if cts at 0 = 'enter' {
+				num_participants <- num_participants + 1;
+			}
+		}
+		write "CFPS: " + length(cfps);
+		auction_started <- true;
+	}
+	// should only trigger when there are no messages to process
+	reflex send_message when: (empty(cfps) and auction_started and (time mod 2 = 0)) {
 		loop p over: participants {
 			do start_conversation 
 				to: [p]
@@ -166,6 +221,10 @@ species auctioneer skills: [fipa] {
 	
 	reflex read_message when: !(empty(accept_proposals) and empty(reject_proposals)) {
 		loop msg over: accept_proposals {
+			if not auction_won {
+				winner <- list(msg.contents) at 2;
+				auction_won <- true;			
+			}
 			write msg.contents;
 			// do smthn with msg.contents
 		}
@@ -173,7 +232,26 @@ species auctioneer skills: [fipa] {
 		if length(reject_proposals) = length(participants) {
 			// next iteration of auction
 			write 'moving to next round';
+			loop rej over: reject_proposals {
+				write rej.contents;
+			}
+			write 'Proposals remaining: ' + length(reject_proposals);
+			asking_price <- asking_price * decr_factor;
 		}
+	}
+	
+	reflex inform_winner when: winner != nil and auction_won {
+		write "Winner found";
+		do start_conversation
+			to: participants
+			protocol: 'fipa-propose'
+			performative: 'inform'
+			contents: ['auction over', winner]
+		;
+		winner <- nil;
+		has_proposed_auction <- false;
+		auction_started <- false;
+		auction_won <- false;
 	}
 	
 	aspect base {
