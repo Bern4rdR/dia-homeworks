@@ -46,7 +46,7 @@ global {
 			list<people> visitors <- people where (each.color = #yellow);
 			participants <- visitors;
 			asking_price <- 10.0;
-			min_price <- 9.0;
+			min_price <- 8.5;
 		}
 	}
 }
@@ -70,7 +70,7 @@ species people skills: [moving, fipa] {
 	int current_auction_id <- nil;
 	int id <- rnd(1, 10000000);
 	
-	float acceptable_price <- rnd(5, 8.5);
+	float acceptable_price <- rnd(5, 7.5);
 	
 	bool isHungry {
 		return hungry < ht_threshold;
@@ -124,16 +124,16 @@ species people skills: [moving, fipa] {
 	reflex place_bid when: !(empty(proposes)) {
 		message current_bid <- proposes at 0;
 		float price <- list(current_bid.contents) at 0;
-		write current_bid.contents;
+		// write current_bid.contents;
 		
 		if (price <= acceptable_price) {
-			write 'I\'ll buy';
+			// write 'I\'ll buy';
 			do accept_proposal
 				message: current_bid
 				contents: ['I\'ll buy', price, id]
 			;
 		} else {
-			write 'Price too high';
+			// write 'Price too high';
 			do reject_proposal
 				message: current_bid
 				contents: ['Price too high']
@@ -198,17 +198,18 @@ species auctioneer skills: [fipa] {
 	reflex read_cfp_response when: (!empty(cfps) and has_proposed_auction and not auction_started) {
 		loop ap over: cfps {
 			list cts <- list(ap.contents);
-			write cts at 0;
+			// write cts at 0;
 			
 			if cts at 0 = 'enter' {
 				num_participants <- num_participants + 1;
 			}
 		}
-		write "CFPS: " + length(cfps);
+		// write "CFPS: " + length(cfps);
 		auction_started <- true;
 	}
 	// should only trigger when there are no messages to process
 	reflex send_message when: (empty(cfps) and auction_started and (time mod 2 = 0)) {
+		write 'asking price: ' + asking_price;
 		loop p over: participants {
 			do start_conversation 
 				to: [p]
@@ -222,7 +223,7 @@ species auctioneer skills: [fipa] {
 	reflex read_message when: !(empty(accept_proposals) and empty(reject_proposals)) {
 		loop msg over: accept_proposals {
 			if not auction_over {
-				winner <- list(msg.contents) at 2;
+				winner <- int(list(msg.contents) at 2);
 				auction_over <- true;			
 			}
 			write msg.contents;
@@ -231,15 +232,16 @@ species auctioneer skills: [fipa] {
 		
 		if length(reject_proposals) = length(participants) {
 			// next iteration of auction
-			write 'moving to next round';
 			loop rej over: reject_proposals {
 				write rej.contents;
 			}
-			write 'Proposals remaining: ' + length(reject_proposals);
+			write 'moving to next round';
 			asking_price <- asking_price * decr_factor;
 			if asking_price < min_price {
 				auction_over <- true;
+				write 'minimum price reached: ending auction';
 			}
+			
 		}
 	}
 	
