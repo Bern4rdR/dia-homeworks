@@ -20,7 +20,7 @@ global {
 	float ht_threshold <- 2.0;
 	float max_ht <- 30.0;
 	
-	int num_people <- 10;
+	int num_people <- 100;
 	// graph festival_grounds;
 	
 	init {
@@ -255,7 +255,7 @@ species auctioneer skills: [fipa] {
 		}
 	}
 	
-	reflex inform_result when: auction_over {
+	reflex inform_result when: auction_over and auction_started {
 		if winner != 0 {
 			write "Winner found: " + winner;
 		}
