@@ -2,9 +2,9 @@ model festival_fair
 
 /*
  * [x] New agent type: auctioneer
- *    [ ] pop up at least once per simulation
+ *    [x] pop up at least once per simulation
  *    [x] communicate only with FIPA
- * [?] Dutch auction: sell items to auction winners
+ * [x] Dutch auction: sell items to auction winners
  *      - start price higher than market value
  *      - reduce price until offer
  *      - first bid is winner
@@ -13,7 +13,9 @@ model festival_fair
  *      - start at minimmum accepted price
  *      - get bids until no one bids higher
  *      - highest bid is winner
- *
+ * [ ] Sealed auction: one bid each
+ *      - each participant places exactly one bid
+ *      - highest bid wins
  */
 
 
@@ -28,8 +30,7 @@ global {
 	int num_people <- 10;
 	bool dutch_auction <- false;
 	bool english_auction <- false;
-	bool blind_auction <- false;
-	// graph festival_grounds;
+	bool sealed_auction <- false;
 	
 	init {
 		create building number: 4 {
@@ -47,29 +48,41 @@ global {
 		
 		if (dutch_auction){
 			create dutch_people number: num_people {
-			speed <- rnd(min_speed, max_speed);
-			information_center <- one_of(information_centers);		
-		}
+				speed <- rnd(min_speed, max_speed);
+				information_center <- one_of(information_centers);		
+			}
 		
-		create dutch_auctioneer {
-			list<dutch_people> visitors <- dutch_people where (each.color = #yellow);
-			participants <- visitors;
-			asking_price <- 10.0;
-			min_price <- 9.0;
-		}
-		
+			create dutch_auctioneer {
+				list<dutch_people> visitors <- dutch_people where (each.color = #yellow);
+				participants <- visitors;
+				asking_price <- 10.0;
+				min_price <- 3.0;
+			}
 		}
 		
 		if (english_auction){
 			create english_people number: num_people {
-			speed <- rnd(min_speed, max_speed);
-			information_center <- one_of(information_centers);		
+				speed <- rnd(min_speed, max_speed);
+				information_center <- one_of(information_centers);		
+			}
+			
+			create english_auctioneer {
+				list<english_people> visitors <- english_people where (each.color = #yellow);
+				participants <- visitors;
+			}
 		}
 		
-		create english_auctioneer {
-			list<english_people> visitors <- english_people where (each.color = #yellow);
-			participants <- visitors;
-		}
+		if sealed_auction {
+			create dutch_people number: num_people {
+				speed <- rnd(min_speed, max_speed);
+				information_center <- one_of(information_centers);
+			}
+			
+			create sealed_auctioneer {
+				list<dutch_people> visitors <- dutch_people where (each.color = #yellow);
+				participants <- visitors;
+				min_price <- 3.0;
+			}
 		}
 		
 	}
@@ -154,7 +167,7 @@ species dutch_people skills: [moving, fipa] {
 			write 'I\'ll buy';
 			do accept_proposal
 				message: current_bid
-				contents: ['I\'ll buy', price, id]
+				contents: ['I\'ll buy', acceptable_price, id]
 			;
 		} else {
 			write 'Price too high';
@@ -168,9 +181,9 @@ species dutch_people skills: [moving, fipa] {
 	reflex handle_cfp when: !(empty(cfps)) {
 		message next_cfp <- cfps at 0;
 		string type <- list(next_cfp.contents) at 0;
-		if (type = "dutch") {
+		if (["dutch", 'sealed'] contains type) {
 			write 'I\'ll enter the auction';
-			current_auction_id <- list(next_cfp.contents) at 1;
+			current_auction_id <- int(list(next_cfp.contents) at 1);
 			do cfp
 				message: next_cfp
 				contents: ['enter', current_auction_id]
@@ -487,6 +500,88 @@ species english_auctioneer skills: [fipa] {
 	}
 }
 
+species sealed_auctioneer skills: [fipa] {
+	list<dutch_people> participants;
+	float min_price;
+	int auction_id <- rnd(10000000);
+	bool has_proposed_auction <- false;
+	bool auction_started <- false;
+	bool auction_over <- false;
+	int num_participants <- 0;
+	int winner <- 0;
+
+	reflex send_cfp when: (time=1) {
+		write 'proposing auction';
+		loop p over: participants {
+			do start_conversation
+			to: [p]
+			protocol: 'fipa-propose'
+			performative: 'cfp'
+			contents: ["sealed", auction_id];
+		}
+		has_proposed_auction <- true;
+	}
+	
+	reflex read_cfp_response when: (!empty(cfps) and has_proposed_auction and not auction_started) {
+		write 'got responses';
+		loop ap over: cfps {
+			list cts <- list(ap.contents);
+			write cts at 0;
+			
+			if cts at 0 = 'enter' {
+				num_participants <- num_participants + 1;
+			}
+		}
+		write "CFPS: " + length(cfps);
+		auction_started <- true;
+	}
+	// should only trigger when there are no messages to process
+	reflex send_message when: (empty(cfps) and auction_started and (time mod 2 = 0)) {
+		write 'starting auction';
+		loop p over: participants {
+			do start_conversation 
+				to: [p]
+				protocol: 'fipa-propose'
+				performative: 'propose'
+				contents: [min_price]
+			;
+		}
+	}
+	
+	reflex read_message when: !(empty(accept_proposals)) {
+		write 'got bids';
+		float highest_bid <- 0.0;
+		loop msg over: accept_proposals {
+			float bid <- float(list(msg.contents) at 1);
+			if bid > highest_bid {
+				highest_bid <- bid;
+				winner <- highest_bid >= min_price ? int(list(msg.contents) at 2) : 0;
+			}
+		}
+		auction_over <- true;
+	}
+	
+	reflex inform_result when: auction_over {
+		if winner != 0 {
+			write "Winner found: " + winner;
+		}
+		do start_conversation
+			to: participants
+			protocol: 'fipa-propose'
+			performative: 'inform'
+			contents: ['auction over', winner]
+		;
+		winner <- nil;
+		has_proposed_auction <- false;
+		auction_started <- false;
+		auction_over <- false;
+	}
+	
+	aspect base {
+		draw circle(2) color: #blue border: #black;
+	}
+}
+
 experiment festival_dutch_auction type: gui {
 	parameter "Number of people agents" var: num_people category: "People" ;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
@@ -514,3 +609,19 @@ experiment festival_english_auction type: gui {
 		}
 	}
 }
+
+
+experiment festival_sealed_auction type: gui {
+	parameter "Sealed auction" var: sealed_auction init: true read_only: true;
+	parameter "Number of people agents" var: num_people category: "People" ;
+	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
+	parameter "maximal speed" var: max_speed category: "People" max: 10 #km/#h;
+	
+	output {
+		display festival_display type: 2d {
+			species building aspect: base;
+			species dutch_people aspect: base;
+		}
+	}
+}
+
