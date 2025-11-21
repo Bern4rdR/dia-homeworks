@@ -215,9 +215,13 @@ species english_people skills: [moving, fipa] {
 	point target_dest <- nil;
 	int current_auction_id <- nil;
 	int id <- rnd(1, 10000000);
+	int biased_rand(int min_value <-0, int max_value) {
+    	float r <- rnd(1.0);
+    	float y <- (r ^ 2.5) * (max_value-min_value);
+    	return int(y)+min_value;
+		}
 	
-	int max_price <- rnd(10, 100);
-	int random_increment <- rnd(1,5);
+	int max_price <- biased_rand(50, 100);
 	
 	bool isHungry {
 		return hungry < ht_threshold;
@@ -271,8 +275,10 @@ species english_people skills: [moving, fipa] {
 	reflex place_bid when: !(empty(proposes)) {
 		message current_bid <- proposes at 0;
 		int price <- list(current_bid.contents) at 0;
-		int next_offer <- price + random_increment;
-		
+		int next_offer <- price +  biased_rand(1, 10);
+		if (next_offer > max_price and price < max_price){
+			next_offer <- max_price;
+		}
 		if (price <= max_price and next_offer <= max_price) {
 			write string(id)+': I\'ll buy at '+ next_offer;
 			do accept_proposal
@@ -583,6 +589,8 @@ species sealed_auctioneer skills: [fipa] {
 }
 
 experiment festival_dutch_auction type: gui {
+	float minimum_cycle_duration <- 1.0;
+	parameter "Dutch Auction" var: dutch_auction init: true read_only: true;
 	parameter "Number of people agents" var: num_people category: "People" ;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
 	parameter "maximal speed" var: max_speed category: "People" max: 10 #km/#h;
@@ -612,6 +620,7 @@ experiment festival_english_auction type: gui {
 
 
 experiment festival_sealed_auction type: gui {
+	float minimum_cycle_duration <- 1.0;
 	parameter "Sealed auction" var: sealed_auction init: true read_only: true;
 	parameter "Number of people agents" var: num_people category: "People" ;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
