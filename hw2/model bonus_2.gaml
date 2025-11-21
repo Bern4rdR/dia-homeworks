@@ -27,7 +27,7 @@ global {
 	float ht_threshold <- 2.0;
 	float max_ht <- 30.0;
 	
-	int num_people <- 10;
+	int num_people <- 100;
 	bool dutch_auction <- false;
 	bool english_auction <- false;
 	bool sealed_auction <- false;
@@ -66,6 +66,12 @@ global {
 				information_center <- one_of(information_centers);		
 			}
 			
+			create english_people number: 1 {
+				speed <- rnd(min_speed, max_speed);
+				information_center <- one_of(information_centers);		
+				max_price <- 120;
+			}
+			
 			create english_auctioneer {
 				list<english_people> visitors <- english_people where (each.color = #yellow);
 				participants <- visitors;
@@ -81,7 +87,7 @@ global {
 			create sealed_auctioneer {
 				list<dutch_people> visitors <- dutch_people where (each.color = #yellow);
 				participants <- visitors;
-				min_price <- 3.0;
+				min_price <- 70.0;
 			}
 		}
 		
@@ -106,8 +112,15 @@ species dutch_people skills: [moving, fipa] {
 	point target_dest <- nil;
 	int current_auction_id <- nil;
 	int id <- rnd(1, 10000000);
+	string auction_type <- "";
 	
-	float acceptable_price <- rnd(5.0, 8.5);
+	float biased_rand(float min_value <-0, float max_value) {
+    	float r <- rnd(1.0);
+    	float y <- (r ^ 2.5) * (max_value-min_value);
+    	return int(y)+min_value;
+		}
+	
+	float acceptable_price <- rnd(50, 100.0);
 	
 	bool isHungry {
 		return hungry < ht_threshold;
@@ -162,7 +175,9 @@ species dutch_people skills: [moving, fipa] {
 		message current_bid <- proposes at 0;
 		float price <- list(current_bid.contents) at 0;
 		write current_bid.contents;
-		
+		if (auction_type = 'sealed') {
+			acceptable_price <- biased_rand(price, acceptable_price);
+		}
 		if (price <= acceptable_price) {
 			write 'I\'ll buy';
 			do accept_proposal
@@ -182,6 +197,7 @@ species dutch_people skills: [moving, fipa] {
 		message next_cfp <- cfps at 0;
 		string type <- list(next_cfp.contents) at 0;
 		if (["dutch", 'sealed'] contains type) {
+			auction_type <- type;
 			write 'I\'ll enter the auction';
 			current_auction_id <- int(list(next_cfp.contents) at 1);
 			do cfp
@@ -490,6 +506,19 @@ species english_auctioneer skills: [fipa] {
 	}
 	
 	reflex inform_result when: cycle - current_time > 5 and current_winner != 0{
+		list<message> msgs <- accept_proposals;
+		loop msg over: msgs {
+			int new_offer <- list(msg.contents) at 1;
+			int offerer <- list(msg.contents) at 2; 
+			if (new_offer > current_price and offerer != current_winner){
+				current_price <- new_offer;
+				current_winner <- list(msg.contents) at 2;
+				current_time <- cycle;
+			}
+			
+
+//			write msg.contents;
+		}
 		
 		write "Winner found: " + current_winner + " at price "+ current_price;
 		do start_conversation
@@ -515,6 +544,7 @@ species sealed_auctioneer skills: [fipa] {
 	bool auction_over <- false;
 	int num_participants <- 0;
 	int winner <- 0;
+	float winning_bid <- 0.0;
 
 	reflex send_cfp when: (time=1) {
 		write 'proposing auction';
@@ -565,11 +595,12 @@ species sealed_auctioneer skills: [fipa] {
 			}
 		}
 		auction_over <- true;
+		winning_bid <- highest_bid;
 	}
 	
 	reflex inform_result when: auction_over {
 		if winner != 0 {
-			write "Winner found: " + winner;
+			write "Winner found: " + winner + "at price: " + winning_bid;
 		}
 		do start_conversation
 			to: participants
