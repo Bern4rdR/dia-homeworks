@@ -5,8 +5,9 @@ global {
 	float min_speed <- 0.5 #m / #s;
 	float max_speed <- 3.0 #m / #s;
 	float max_ht <- 30.0;
+	bool pair_match_enabled <- false;
 	
-	int num_people <- 100;
+	int num_people <- 200;
 	// graph festival_grounds;
 	
 	list<point> stage_locations <- [[40, 20], [40, 40], [40, 60], [40, 80]];
@@ -89,14 +90,18 @@ species people skills: [moving, fipa] {
 	list<list> stage_prefs <- [[], [], [], []];
 	list<int> stage_count <- [0, 0, 0, 0];
 	
+	bool max_one <- false;
+	int last_swap_time <- 0;
+	
+	
 	float low_pop_ut(float x) {
-		return 100.0 - x;
-//		return 1000/((x^2)/100 + 1);
+//		return 100.0 - x;
+		return 1000/((x^2)/100 + 1);
 	}
 	
 	float high_pop_ut(float x) {
-		return x*1.0;
-//		return (x^2)/100;
+//		return x*1.0;
+		return (x^2)/100;
 	}
 	
 	point set_location(point stage_loc) {
@@ -152,16 +157,22 @@ species people skills: [moving, fipa] {
 		write "Stage Prefs 3: " + stage_count[3];
 		current_ut <- calc_global_utility(people_ut);
 		write "Global utility with density: " + current_ut;
+		last_swap_time <- cycle;
 		
 	}
 	
-	reflex global_coordinate when: length(people_ut) > 1 {
+	reflex global_coordinate when: length(people_ut) > 1 and !max_one{
+		if cycle - last_swap_time > num_people {
+			max_one <- true;
+			write "switching to pair match!!!";
+			return;
+		}
 		int pind <- cycle mod num_people;
 		int best_ind <- -1;
 		list step_p <- people_ut[pind];
 		float best_ut <- 0.0;
 		int original_ind <- step_p[3];
-		loop i from: 0 to: 3 step: 1 { // hardcoded num stages
+		loop i from: 0 to: length(stage_locations) - 1 step: 1 { // hardcoded num stages
 			step_p[3] <- i;
 			float util <- calc_global_utility(people_ut);
 			if util > best_ut {
@@ -171,6 +182,7 @@ species people skills: [moving, fipa] {
 		}
 		step_p[3] <- best_ind;
 		if best_ind != original_ind {
+			last_swap_time <- cycle;
 			do start_conversation
 				to: [step_p[0]]
 				protocol: 'fipa_propose'
@@ -180,6 +192,56 @@ species people skills: [moving, fipa] {
 			write "Expected new global utility: " + best_ut;
 		}
 		
+	}
+	
+	// this is really slow and inefficient. It looks to see if moving a pair improves global utility (it does work.)
+	// you could make it faster but I hate gamma so I won't. We don't need this, it was just an experiment.
+	// the calc_global_util is O(N) so this is O(n^2)
+	reflex global_coordinate_pair when: max_one and pair_match_enabled {
+		int pind <- cycle mod num_people;
+		list step_p <- people_ut[pind];
+		float best_ut <- current_ut;
+		int original_ind <- step_p[3];
+		loop i from: 0 to: length(stage_locations) - 1 step: 1 { // hardcoded num stages
+			step_p[3] <- i;
+			loop p2 over: people_ut {
+				if p2[0] != step_p[0] {
+					int p2_orig <- p2[3];
+					int p2_best_ind <- 0;		
+					loop j from: 0 to: length(stage_locations) - 1 step: 1 {
+						p2[3] <- j;
+						float new_ut <- calc_global_utility(people_ut);
+						if new_ut > best_ut {
+							best_ut <- new_ut;
+							p2_best_ind <- j;
+						}
+					}
+					// exit on first pair improvement; greedy i guess
+					if best_ut > current_ut {
+						current_ut <- best_ut;
+						// update both positions
+						do start_conversation
+							to: [step_p[0]]
+							protocol: 'fipa_propose'
+							performative: 'request'
+							contents: [i]
+						;
+						do start_conversation
+							to: [p2[0]]
+							protocol: 'fipa_propose'
+							performative: 'request'
+							contents: [p2_best_ind]
+						;
+						write "Expected new global utility: " + best_ut;
+						p2[3] <- p2_best_ind;
+						return;
+					} else {
+						p2[3] <- p2_orig;
+					}
+				}
+			}
+		}
+		step_p[3] <- original_ind;
 	}
 	
 	reflex go_to_new_stage when: !empty(requests) {
