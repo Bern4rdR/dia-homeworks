@@ -8,7 +8,9 @@ global {
 	bool pair_match_enabled <- false;
 	
 	int num_people <- 200;
+	float best_utility_overall;
 	// graph festival_grounds;
+	list<people> sampled;
 	
 	list<point> stage_locations <- [[40, 20], [40, 40], [40, 60], [40, 80]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
@@ -23,6 +25,7 @@ global {
 			video <- rnd(1.0);
 			pref <- one_of(["low", "high"]);
 		}
+		sampled <- sample(list(people), 10, false);
 		int counter <- 0;
 		list<people> visitors <- people where (each.color = #yellow);
 		loop loc over: stage_locations {
@@ -189,6 +192,7 @@ species people skills: [moving, fipa] {
 				performative: 'request'
 				contents: [best_ind]
 			;
+			best_utility_overall <- best_ut;
 			write "Expected new global utility: " + best_ut;
 		}
 		
@@ -315,6 +319,22 @@ experiment festival_traffic type: gui {
 		display festival_display type: 2d {
 			species stage aspect: base;
 			species people aspect: base;
+		}
+			display Statistics type: 2d{
+			chart "Global Utility" type: series position:{0,0} size:{1.0,0.5}{
+				 
+			
+				//data "Cycle" value: cycle;
+				 data "Utility" value: best_utility_overall;
+			}
+			
+			chart "Individual utilities" type: series position:{0,0.5} size:{1.0,0.5}{
+				write "Sample: "+sampled;
+				loop l over: sampled {
+					data legend: string(l.index) value: l.current_utility;
+					
+				}
+			}
 		}
 	}
 }
