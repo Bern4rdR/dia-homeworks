@@ -8,10 +8,6 @@ global {
 		
 		list<queen> queens <- queen where (true);
 		
-		create initiator {
-			first <- queens at 0;
-		}
-		
 		(queens at 0).successor <- queens at 1;
 		(queens at 0).row <- 0;
 		(queens at 0).location <- {0, 50/n_size};
@@ -25,6 +21,9 @@ global {
 		(queens at (n_size-1)).row <- n_size-1;
 		(queens at (n_size-1)).location <- {0, 100-50/n_size};
 		
+		create initiator {
+			first <- queens at 0;
+		}
 		bool started <- (initiator at 0).start();
 	}
 }
@@ -44,7 +43,9 @@ species initiator skills: [fipa] {
 }
 
 grid cell width: n_size height: n_size neighbors: 4 skills: [fipa] {
-	bool has_queen <- false;
+	bool has_queen {
+		return !empty(queen inside self);
+	}
 	rgb color <- grid_x mod 2 = grid_y mod 2 ? rgb(238,238,210) : rgb(118, 150, 86);
 	
 	bool is_safe {
@@ -53,7 +54,7 @@ grid cell width: n_size height: n_size neighbors: 4 skills: [fipa] {
 		}
 		// straight up  ( | )
 		loop row from: 0 to: max(0, grid_y-1) {
-			if cell[grid_x, row].has_queen {
+			if cell[grid_x, row].has_queen() {
 				return false;
 			}
 		}
@@ -62,7 +63,7 @@ grid cell width: n_size height: n_size neighbors: 4 skills: [fipa] {
 		int col <- grid_x-1;
 		loop row from: grid_y-1 to: 0 {
 			if col < 0 { break; }
-			if cell[col, row].has_queen {
+			if cell[col, row].has_queen() {
 				return false;
 			}
 			col <- col - 1;
@@ -72,22 +73,13 @@ grid cell width: n_size height: n_size neighbors: 4 skills: [fipa] {
 		col <- grid_x+1;
 		loop row from: grid_y-1 to: 0 {
 			if col >= n_size { break; }
-			if cell[col, row].has_queen {
+			if cell[col, row].has_queen() {
 				return false;
 			}
 			col <- col + 1;
 		} 
 		
 		return true;
-	}
-	
-	reflex queen_placed when: !empty(informs) {
-		message info <- informs at 0;
-		if list(info.contents) contains 'place' {
-			has_queen <- true;
-		} else if list(info.contents) contains 'remove' {
-			has_queen <- false;
-		}
 	}
 }
 
@@ -121,7 +113,6 @@ species queen skills: [fipa] {
 			current_sq <- available_sq where (each.grid_x > current_sq.grid_x) at 0;
 		}
 		
-		// write "selected square: " + current_sq;
 		location <- current_sq.location;
 		return true;
 	}
@@ -143,39 +134,24 @@ species queen skills: [fipa] {
 		return false;
 	}
 	
-	reflex my_turn when: !empty(informs) and (time mod n_size = row) {
+	reflex my_turn when: !empty(informs) {
 		message msg <- (informs at 0).contents; // clear message queue
 		
 		// receive message that it's my turn
 		//   when predecessor has placed
 		//   or successor can't place
 		//  either way, move to next available
-		if current_sq != nil { // update board
-			do start_conversation
-				to: [current_sq]
-				protocol: 'fipa-propose'
-				performative: 'inform'
-				contents: ['remove']
-			;
-		}
 		placed <- place();
-		if placed { // update board
-			do start_conversation
-				to: [current_sq]
-				protocol: 'fipa-propose'
-				performative: 'inform'
-				contents: ['place']
-			;
-		} else { // reset available squares before informing predecessor
+		if !placed { // reset available squares before informing predecessor
 			current_sq <- nil;
 			available_sq <- cell where (each.grid_y = row);
 		}
 		if your_turn() {
-			write "Algorithm Complete";
+			write "Algorithm Complete (at time " + int(time) + ")";
 		}
 	}
 	
-	
+
 	aspect icon {
 	    draw queen_shape size: 100/n_size;
 	}
