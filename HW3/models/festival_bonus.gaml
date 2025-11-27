@@ -84,6 +84,7 @@ species people skills: [moving, fipa] {
 	list<float> base_utilities <- [];
 	int stage_index <- 0;
 	list<list> people_ut <- [];
+	float local_ut <- 0.0;
 	
 	list<float> utility_vars <- [];
 	float current_ut <- 0.0;
@@ -269,9 +270,9 @@ species people skills: [moving, fipa] {
 			string pr <- peeps[2];
 			int si <- peeps[3];
 			if pr = "low" {
-				global_ut <- global_ut + low_pop_ut(stage_count[si]);
+				global_ut <- global_ut + low_pop_ut(stage_count[si]) + bs[si];
 			} else {
-				global_ut <- global_ut + high_pop_ut(stage_count[si]);
+				global_ut <- global_ut + high_pop_ut(stage_count[si]) + bs[si];
 			}
 			
 		}
@@ -315,7 +316,13 @@ experiment festival_traffic type: gui {
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
 	parameter "maximal speed" var: max_speed category: "People" max: 10 #km/#h;
 	
+	reflex debug {
+			
+			write "sampled utilities: " + (sampled collect each.local_ut);
+		}
 	output {
+		
+		
 		display festival_display type: 2d {
 			species stage aspect: base;
 			species people aspect: base;
@@ -331,7 +338,7 @@ experiment festival_traffic type: gui {
 			chart "Individual utilities" type: series position:{0,0.5} size:{1.0,0.5}{
 				write "Sample: "+sampled;
 				loop l over: sampled {
-					data legend: string(l.index) value: l.current_utility;
+					data legend: string(l.index) value: l.local_ut/1000;
 					
 				}
 			}
