@@ -6,6 +6,8 @@ global {
 	float max_speed <- 3.0 #m / #s;
 	float max_ht <- 30.0;
 	bool pair_match_enabled <- false;
+	float global_weight;
+	bool use_linear <- false;
 	
 	int num_people <- 200;
 	float best_utility_overall;
@@ -99,13 +101,14 @@ species people skills: [moving, fipa] {
 	
 	
 	float low_pop_ut(float x) {
-//		return 100.0 - x;
-		return 1000/((x^2)/100 + 1);
+		if (use_linear)	{return 100.0 - x;}
+		else {return 1000/((x^2)/100 + 1);
+		}
 	}
 	
 	float high_pop_ut(float x) {
-//		return x*1.0;
-		return (x^2)/100;
+		if (use_linear) {return x*1.0;}
+		else {return (x^2)/100;}
 	}
 	
 	point set_location(point stage_loc) {
@@ -270,9 +273,9 @@ species people skills: [moving, fipa] {
 			string pr <- peeps[2];
 			int si <- peeps[3];
 			if pr = "low" {
-				global_ut <- global_ut + low_pop_ut(stage_count[si]) + bs[si];
+				global_ut <- global_ut + (global_weight * low_pop_ut(stage_count[si])) + ((1-global_weight) * bs[si]);
 			} else {
-				global_ut <- global_ut + high_pop_ut(stage_count[si]) + bs[si];
+				global_ut <- global_ut + (global_weight * high_pop_ut(stage_count[si])) + ((1-global_weight) * bs[si]);
 			}
 			
 		}
@@ -308,10 +311,10 @@ species people skills: [moving, fipa] {
 	reflex update_utility {
 		float close <- people count (distance_to(each, self) < 5);
 		if (self.pref = "low"){
-			local_ut <- low_pop_ut(close) + base_utilities[stage_index];
+			local_ut <- (global_weight * low_pop_ut(close))  + ((1-global_weight) * base_utilities[stage_index]);
 		}
 		else {
-			local_ut <- high_pop_ut(close) + base_utilities[stage_index];
+			local_ut <- (global_weight * high_pop_ut(close)) + ((1-global_weight) * base_utilities[stage_index]);
 		}
 		
 	}
@@ -326,6 +329,8 @@ experiment festival_traffic type: gui {
 	parameter "Number of people agents" var: num_people category: "People" ;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
 	parameter "maximal speed" var: max_speed category: "People" max: 10 #km/#h;
+	parameter "Global preference weight" var: global_weight min: 0.0 max: 1.0 step: 0.1 init: 0.5;
+	parameter "Use linear function instead of exponential" var: use_linear init: false; 
 	
 	reflex debug {
 			
@@ -350,7 +355,6 @@ experiment festival_traffic type: gui {
 				write "Sample: "+sampled;
 				loop l over: sampled {
 					data legend: string(l.index) value: l.local_ut/1000;
-					
 				}
 			}
 		}
