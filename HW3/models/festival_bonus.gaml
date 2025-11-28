@@ -305,6 +305,17 @@ species people skills: [moving, fipa] {
 		
 	}
 	
+	reflex update_utility {
+		float close <- people count (distance_to(each, self) < 5);
+		if (self.pref = "low"){
+			local_ut <- low_pop_ut(close) + base_utilities[stage_index];
+		}
+		else {
+			local_ut <- high_pop_ut(close) + base_utilities[stage_index];
+		}
+		
+	}
+	
 	
 	aspect base {
 		draw circle(1) color: color border: #black;
