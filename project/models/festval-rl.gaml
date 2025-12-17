@@ -5,6 +5,7 @@ global {
 	float min_speed <- 0.5 #m / #s;
 	float max_speed <- 3.0 #m / #s;
 	float max_ht <- 30.0;
+	string server_url <- "http://localhost";
 	
 	int num_people <- 200;
 	// graph festival_grounds;
@@ -34,19 +35,25 @@ global {
 		}
 		all_people <- people.population;
 		
+		create rl number: 1 {
+			goal <- {50, 50};
+			location <- {10, 10};
+			
+		}
+		
 		
 	}
 	
-	reflex save_training_data when: (cycle mod 1 = 0) {
-		list<point> locations <- [];
-		
-		loop p over: all_people {
-			locations <- locations + p.location;
-		}
-		save(locations) 
-			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
-		
-	}
+//	reflex save_training_data when: (cycle mod 1 = 0) {
+//		list<point> locations <- [];
+//		
+//		loop p over: all_people {
+//			locations <- locations + p.location;
+//		}
+//		save(locations) 
+//			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
+//		
+//	}
 }
 
 species stage skills: [moving] {
@@ -105,6 +112,83 @@ species people skills: [moving, fipa] {
 	}
 }
 
+species rl skills: [moving, network] {
+	rgb color <- #pink;
+	point goal <- nil;
+	point target_dest <- nil;
+	int logical_time <- 0;
+	bool connected <- false;
+	
+	reflex send_data {
+		list<point> locs <- [];
+		loop p over: all_people {
+			locs <- locs + p.location;
+		}
+		logical_time <- logical_time + 1;
+        
+        // Serialize JSON yourself
+	    string body <- ""+goal.x+"\t"+goal.y+"\t"+location.x+"\t"+location.y+"\t"+logical_time+"\t"+locs;
+		if !connected {
+		    do connect to: server_url protocol: "http" port: 7654 with_name: "rlserver";
+			connected <- true;
+		}
+	
+	    do send to: "/update" contents: [
+	      "POST", 
+	      body, 
+	      ["Content-Type"::"application/json"]
+	    ];
+        
+
+        write "sent" + logical_time;
+//        do post to: "server" data: json_data;
+	}
+	
+	
+	reflex get_destination when: has_more_message() {
+		message msg <- fetch_message();
+		
+        // Parse JSON response
+        map<string, unknown> response <- msg.contents as map<string, unknown>;
+        string bdy <- response["BODY"];
+		write "Got Msg: " + bdy;
+		
+		int si <- 0;
+		loop i from: 0 to: length(bdy) {
+			if bdy at i = "," {
+				si <- i;
+				break;
+			}
+		}
+		string sdx <- "";
+		string sdy <- "";
+		loop i from: 0 to: length(bdy) {
+			if i < si {
+				sdx <- sdx + bdy at i;
+			} else if i > si {
+				sdy <- sdy + bdy at i;
+			}
+		}
+		write "data  " + sdx + " " + sdy;
+		float tdx <- sdx as float;
+		float tdy <- sdy as float;
+		target_dest <- {tdx, tdy};
+		write "New Dest: " + target_dest;
+        // Extract new goal from JSON
+
+	}
+	
+	reflex move when: target_dest != nil {
+		do goto target: target_dest;
+	}
+	
+	aspect base {
+		draw triangle(1) color: color border: #black;
+	}
+	
+}
+
+
 experiment festival_traffic type: gui {
 	parameter "Number of people agents" var: num_people category: "People" ;
 	parameter "minimal speed" var: min_speed category: "People" min: 0.1 #km/#h ;
@@ -113,6 +197,7 @@ experiment festival_traffic type: gui {
 	output {
 		display festival_display type: 2d {
 			species people aspect: base;
+			species rl aspect: base;
 		}
 	}
 }
