@@ -10,7 +10,7 @@ global {
 	// graph festival_grounds;
 	
 //	list<point> stage_locations <- [[20, 20], [40, 40], [60, 60], [80, 80]]; // diagonal
-	list<point> stage_locations <- [[30, 30], [30, 70], [70, 30], [70, 70]];
+	list<point> stage_locations <- [[20, 20], [40, 40], [60, 60], [80, 80]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
@@ -19,8 +19,9 @@ global {
 	
 	
 	init {
-		loop i from: 1 to: 4 {
+		loop i from: 0 to: 3 {
 			create stage {
+				location <- stage_locations at i-1;
 				radians <- i*90.0;
 			}
 		}
@@ -52,13 +53,13 @@ global {
 species stage skills: [moving] {
 	float radians;
 	
-	reflex rotate {
-		radians <- radians + 1; //#pi/180;	
-		float x  <- cos(radians)*29 + 50;
-		float y <- sin(radians)*29 + 50;
-		location <- {x, y};
-		write "loc: " + location + " -- " + radians;
-	}
+//	reflex rotate {
+//		radians <- radians + 1; //#pi/180;	
+//		float x  <- cos(radians)*29 + 50;
+//		float y <- sin(radians)*29 + 50;
+//		location <- {x, y};
+//		write "loc: " + location + " -- " + radians;
+//	}
 }
 
 
