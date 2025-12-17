@@ -23,15 +23,15 @@
     - TBD
 - Grouping person
     - peer pressure theshold
-    - TBD
+    - ideal group size
     - TBD
 - Bartender
-    - TBD
+    - drunk serving tolerance
     - TBD
     - TBD
 - Salseperson
     - selling quota
-    - TBD
+    - target demographic
     - TBD
 
 **Rules**
@@ -41,12 +41,12 @@
     - Bartender: TBD
     - Salesperson: TBD
 - Introvert
-    - Extrovert: TBD
-    - Grouping person: TBD
+    - Extrovert: Will start to avoid based on tiredness
+    - Grouping person: Will avoid if group size exceeds social capacity
     - Bartender: TBD
     - Salesperson: TBD
 - Grouping person
-    - Extrovert: TBD
+    - Extrovert: Will do the same as extroverts based on peer pressure threshold
     - Introvert: TBD
     - Bartender: TBD
     - Salesperson: TBD
