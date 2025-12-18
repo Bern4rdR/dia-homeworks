@@ -68,6 +68,7 @@ species people skills: [moving, fipa] {
 	point target_dest <- nil;
 	bool travelling <- false;
 	stage my_choice <- nil;
+	string personality;
 
 	reflex select_stage when: cycle mod 120 = 0 {
 		my_choice <- one_of(all_stages);
@@ -105,6 +106,149 @@ species people skills: [moving, fipa] {
 		draw circle(1) color: color border: #black;
 	}
 }
+
+
+species extrovert parent: people {
+	float generocity <- rnd(1.0, 2.0); // probability multiplier
+	float networking_skills;
+	// trait #3
+	
+	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
+		agent person <- agent_closest_to(self);
+		
+		switch species_of(person) {
+			match extrovert {
+				write "met extrovert";
+			}
+			match introvert {
+				write "met introvert";
+			}
+			match grouping {
+				write "met grouping person";
+			}
+			match bartender {
+				write "met bartender";
+			}
+			match salesperson {
+				write "met salesperson";
+			}
+		}
+	}
+}
+
+species introvert parent: people {
+	int social_capacity;
+	float tiredness;
+	// trait #3
+	
+	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
+		agent person <- agent_closest_to(self);
+		
+		switch species_of(person) {
+			match extrovert {
+				write "met extrovert";
+			}
+			match introvert {
+				write "met introvert";
+			}
+			match grouping {
+				write "met grouping person";
+			}
+			match bartender {
+				write "met bartender";
+			}
+			match salesperson {
+				write "met salesperson";
+			}
+		}
+	}
+}
+
+species grouping parent: people {
+	float peer_pressure <- rnd(1.0, 2.0); // probability multiplier
+	int group_size <- rnd(3, 7);
+	// trait #3
+	
+	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
+		agent person <- agent_closest_to(self);
+		
+		switch species_of(person) {
+			match extrovert {
+				write "met extrovert";
+			}
+			match introvert {
+				write "met introvert";
+			}
+			match grouping {
+				write "met grouping person";
+			}
+			match bartender {
+				write "met bartender";
+			}
+			match salesperson {
+				write "met salesperson";
+			}
+		}
+	}
+} 
+
+species bartender parent: people {
+	float serving_tolerance;
+	// trait #2
+	// trait #3
+	
+	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
+		agent person <- agent_closest_to(self);
+		
+		switch species_of(person) {
+			match extrovert {
+				write "met extrovert";
+			}
+			match introvert {
+				write "met introvert";
+			}
+			match grouping {
+				write "met grouping person";
+			}
+			match bartender {
+				write "met bartender";
+			}
+			match salesperson {
+				write "met salesperson";
+			}
+		}
+	}
+}
+
+species salesperson parent: people {
+	int selling_quota;
+	string target_demographic;
+	// trait #3
+	
+	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
+		agent person <- agent_closest_to(self);
+		
+		switch species_of(person) {
+			match extrovert {
+				write "met extrovert";
+			}
+			match introvert {
+				write "met introvert";
+			}
+			match grouping {
+				write "met grouping person";
+			}
+			match bartender {
+				write "met bartender";
+			}
+			match salesperson {
+				write "met salesperson";
+			}
+		}
+	}
+}
+
+
 
 experiment festival_traffic type: gui {
 	parameter "Number of people agents" var: num_people category: "People" ;
