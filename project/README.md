@@ -27,7 +27,7 @@
     - TBD
 - Bartender
     - drunk serving tolerance
-    - TBD
+    - charmed chance
     - TBD
 - Salseperson
     - selling quota
@@ -35,6 +35,7 @@
     - TBD
 
 **Rules**
+>Not sure if this is the right interpretation but it may only be necessary to have one rule for each combination of guests
 - Extrovert
     - Introvert: may offer a drink based on `generocity`
     - Salesperson: may buy based on `generocity`
@@ -42,11 +43,11 @@
     - Grouping person: Will avoid if group size exceeds `social capacity`
     - Bartender: TBD
 - Grouping person
-    - Extrovert: Will do the same as extroverts based on `peer pressure threshold`
-    - Salesperson: TBD
+    - Extrovert: will move towards extroverts to form a group with `ideal group size`
+    - Salesperson: Will buy if other extroverts also buy based on `peer pressure threshold`
 - Bartender
-    - Extrovert: TBD
-    - Grouping person: TBD
+    - Extrovert: may still seell above `drunk serving tolerance` if they are easily `charmed`
+    - Grouping person: will only sell if they're below `drunk serving tolerance`
 - Salesperson
     - Introvert: TBD
     - Bartender: TBD
