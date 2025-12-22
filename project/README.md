@@ -36,27 +36,17 @@
 
 **Rules**
 - Extrovert
-    - Introvert: TBD
-    - Grouping person: TBD
-    - Bartender: TBD
-    - Salesperson: TBD
+    - Introvert: may offer a drink based on `generocity`
+    - Salesperson: may buy based on `generocity`
 - Introvert
-    - Extrovert: Will start to avoid based on tiredness
-    - Grouping person: Will avoid if group size exceeds social capacity
+    - Grouping person: Will avoid if group size exceeds `social capacity`
     - Bartender: TBD
-    - Salesperson: TBD
 - Grouping person
-    - Extrovert: Will do the same as extroverts based on peer pressure threshold
-    - Introvert: TBD
-    - Bartender: TBD
+    - Extrovert: Will do the same as extroverts based on `peer pressure threshold`
     - Salesperson: TBD
 - Bartender
     - Extrovert: TBD
-    - Introvert: TBD
     - Grouping person: TBD
-    - Salesperson: TBD
 - Salesperson
-    - Extrovert: TBD
     - Introvert: TBD
-    - Grouping person: TBD
     - Bartender: TBD
