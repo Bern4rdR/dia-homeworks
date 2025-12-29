@@ -13,26 +13,31 @@ global {
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
 	list<people> all_people <- [];
-	list<stage> all_stages <- [];
+	list<bar> all_bars <- [];
 	
 	
 	init {
 		loop i from: 0 to: 3 {
-			create stage {
+			create bar {
 				location <- stage_locations at i-1;
 				radians <- i*90.0;
 			}
 		}
-		all_stages <- stage.population;	
-		write "Stages: " + length(all_stages);
-		loop s over: all_stages{
-			write "stage at: " + s.radians;
+		all_bars <- bar.population;	
+		write "Bars: " + length(all_bars);
+		loop s over: all_bars{
+			write "bar at: " + s.radians;
+			create bartender {
+				location <- s.location;
+				color <- #brown;
+				my_bar <- s;
+			}
 		}
 		
 		create extrovert number: num_people/5 { color <- #yellow; }
 		create introvert number: num_people/5 { color <- #red; }
 		create grouping number: num_people/5 { color <- #green; }
-		create bartender number: num_people/5 { color <- #brown; }
+//		create bartender number: num_people/5 { color <- #brown; }
 		create salesperson number: num_people/5 { color <- #blue; }
 
 		all_people <- people.population;
@@ -52,8 +57,13 @@ global {
 //	}
 }
 
-species stage skills: [moving] {
+species bar skills: [moving] {
 	float radians;
+	rgb color <- #red;
+	
+	aspect base {
+		draw rectangle({4, 3}) color: color border: color;
+	}
 	
 //	reflex rotate {
 //		radians <- radians + 1; //#pi/180;	
@@ -69,14 +79,14 @@ species people skills: [moving, fipa] {
 	rgb color <- #yellow ;
 	point target_dest <- nil;
 	bool travelling <- false;
-	stage my_choice <- nil;
+	bar my_choice <- nil;
 	bool has_beer <- false;
 	float beer_left <- 0.0;
 	
 	float drunkness <- 0.0;
 
 	reflex select_stage when: cycle mod 120 = 0 {
-		my_choice <- one_of(all_stages);
+		my_choice <- one_of(all_bars);
 //		write "choice: " + my_choice.radians;
 	}
 	
@@ -369,6 +379,7 @@ species grouping parent: people {
 species bartender parent: people {
 	float serving_tolerance <- rnd(2.0, 4.5);
 	float charm_tolerance <- rnd(1.0, 5.0);
+	bar my_bar <- nil;
 	// trait #3
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
@@ -411,6 +422,20 @@ species bartender parent: people {
 		}
 		
 	}
+	
+	reflex move {
+		if location distance_to my_bar.location > 2 {
+			target_dest <- my_bar.location;
+		}
+		if target_dest != nil and location distance_to target_dest < 0.1 {
+			target_dest <- nil;
+		}
+		if target_dest != nil {
+			do goto target: target_dest;
+		} else {
+			do wander;
+		}
+	}
 }
 
 species salesperson parent: people {
@@ -447,6 +472,7 @@ experiment festival_traffic type: gui {
 			species extrovert aspect: base;
 			species introvert aspect: base;
 			species grouping aspect: base;
+			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
 		}
