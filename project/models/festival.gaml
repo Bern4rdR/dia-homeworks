@@ -40,16 +40,16 @@ global {
 		
 	}
 	
-	reflex save_training_data when: (cycle mod 1 = 0) {
-		list<point> locations <- [];
-		
-		loop p over: all_people {
-			locations <- locations + p.location;
-		}
-		save(locations) 
-			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
-		
-	}
+//	reflex save_training_data when: (cycle mod 1 = 0) {
+//		list<point> locations <- [];
+//		
+//		loop p over: all_people {
+//			locations <- locations + p.location;
+//		}
+//		save(locations) 
+//			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
+//		
+//	}
 }
 
 species stage skills: [moving] {
@@ -70,6 +70,8 @@ species people skills: [moving, fipa] {
 	point target_dest <- nil;
 	bool travelling <- false;
 	stage my_choice <- nil;
+	bool has_beer <- false;
+	float beer_left <- 0.0;
 	
 	float drunkness <- 0.0;
 
@@ -102,6 +104,29 @@ species people skills: [moving, fipa] {
 		}
 	}
 	
+	action buy_beer(bartender bt) {
+		do start_conversation
+			to: [bt]
+			protocol: 'fipa-propose'
+			performative: 'request'
+			contents: ['Jag skulle gillar ölen, tack!']
+		;
+	}
+	
+	reflex accept_beer when: !empty(accept_proposals) {
+		has_beer <- true;
+		beer_left <- 1.0;
+	}
+	
+	reflex drink_beer when: has_beer {
+		float delta <- rnd(0.1);
+		drunkness <- drunkness + delta;
+		beer_left <- beer_left - delta;
+		if beer_left <= 0.0 {
+			has_beer <- false;
+		}
+	}
+	
 	aspect base {
 		draw circle(1) color: color border: #black;
 	}
@@ -125,7 +150,7 @@ species extrovert parent: people {
 				do start_conversation
 					to: [person]
 					protocol: 'fipa-propose'
-					performative: 'propose'
+					performative: 'request'
 					contents: ['let me buy you a drink']
 				;
 			}
@@ -167,24 +192,121 @@ species extrovert parent: people {
 }
 
 species introvert parent: people {
-	int social_capacity;
+	float social_capacity;
 	float tiredness;
+	float social_decay;
+	list<people> friends;
+	float utility <- 0.0;
+	bool immune <- false;
+	point goal  <- nil;
+	bool goal_reached <- false;
+	bool escaping <- false;
+	bool init <- false;
+	list<point> hist_path <- [];
 	// trait #3
+	
+	reflex init when: !init {
+		init <- true;
+		bartender bt <- one_of(bartender.population);
+		list<people> notsales <- extrovert.population + grouping.population + introvert.population;
+		friends <- friends + bt;
+		loop while: length(friends) < 3 {
+			people nasta <- one_of(notsales);
+			if nasta != self {
+				friends <- friends + nasta;
+			} 
+		}
+		goal <- (friends at 0).location;
+		remove from: friends index: 0;
+	}
+	
+	action run_away(point ploc, bool always_run) {
+		if rnd(100) < 100*(1-social_capacity) or always_run {
+			// run away
+			point delta <- ploc - location;
+			point escape <- {-2 * delta.x, -2 * delta.y};
+			target_dest <- escape;
+			escaping <- true;
+		}
+	}
+	
+	action drop_social_capacity {
+		social_capacity <- social_capacity * (1 - social_decay);
+	}
+	
+	reflex onwards when: goal != nil {
+		target_dest <- goal;
+	}
+	
+	reflex move when: target_dest != nil {
+		do goto target: target_dest;
+		hist_path <- hist_path + location;
+	}
+	
+	reflex escape_reset when: escaping and location distance_to target_dest < 0.5 {
+		target_dest <- goal;
+		escaping <- false;
+	}
+	
+	reflex update_utility when: !immune {
+		loop p over: all_people {
+			float dist <- p.location distance_to location;
+			if  dist < 2.0 {
+				utility <- utility - (2 - dist)/2;
+			}
+		}
+		if !goal_reached and location distance_to goal < 2 {
+			utility <- utility + 10;
+			if length(friends) > 0 {
+				goal <- (friends at 0).location;
+				remove from: friends index: 0;
+			} else {
+				goal_reached <- true;
+				goal <- nil;
+			}
+		}
+	}
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
 		
+		if species_of(person) != introvert {
+			do drop_social_capacity;
+		}
+		
 		switch species_of(person) {
 			match grouping {
 				write "met grouping person";
+				// run away
 			}
 			match bartender {
 				write "met bartender";
+				// buy beer
+				do buy_beer(bartender(person));
+			}
+			match salesperson {
+				// run away
+				write "met salesperson";
+				do run_away(person.location, true);
+			}
+			match extrovert {
+				write "met extrovert";
+				// run away
+				do run_away(person.location, false);
+			}
+			match introvert {
+				write "met introvert";
+				// no worries
 			}
 			default {
 				write "met " + species_of(person);
 			}
 		}
+	}
+	
+	aspect base {
+		draw triangle(2) color: color border: #black;
+		draw polyline(hist_path) color: #blue width: 2;
 	}
 }
 
@@ -278,6 +400,16 @@ species bartender parent: people {
 				write "met " + species_of(person);
 			}
 		}
+	}
+	
+	reflex sell_beer when: !empty(requests) {
+		loop msg over: requests { 
+			do accept_proposal
+				message: msg
+				contents: ['Enjoy, tack!']
+			;	
+		}
+		
 	}
 }
 
