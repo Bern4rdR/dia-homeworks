@@ -36,9 +36,9 @@ global {
 		
 		create extrovert number: num_people/5 { color <- #yellow; }
 		create introvert number: num_people/5 { color <- #red; }
-		create grouping number: num_people/5 { color <- #green; }
+		create police number: num_people/5 { color <- #blue; }
 //		create bartender number: num_people/5 { color <- #brown; }
-		create salesperson number: num_people/5 { color <- #blue; }
+		create salesperson number: num_people/5 { color <- #green; }
 
 		all_people <- people.population;
 		
@@ -96,6 +96,7 @@ species people skills: [moving, fipa] {
 		}
 	}
 	
+	
 	reflex move {
 		if my_choice != nil {
 			target_dest <- my_choice.location;
@@ -114,12 +115,13 @@ species people skills: [moving, fipa] {
 		}
 	}
 	
+	
 	action buy_beer(bartender bt) {
 		do start_conversation
 			to: [bt]
 			protocol: 'fipa-propose'
 			performative: 'request'
-			contents: ['Jag skulle gillar ölen, tack!']
+			contents: ['Jag vill ha en öl, tack!']
 		;
 	}
 	
@@ -134,6 +136,13 @@ species people skills: [moving, fipa] {
 		beer_left <- beer_left - delta;
 		if beer_left <= 0.0 {
 			has_beer <- false;
+		}
+	}
+	
+	reflex asked_to_leave when: !empty(informs) {
+		message msg <- informs at 0;
+		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.8) { // has a 20% chance to defy
+			do die;
 		}
 	}
 	
@@ -177,7 +186,7 @@ species extrovert parent: people {
 					contents: ['i will buy from you']
 				;
 				
-				list<grouping> local_peers <- grouping at_distance 5;
+				list<people> local_peers <- people at_distance 5;
 				if (empty(local_peers)) { return; }
 				do start_conversation // used by grouping person to give in to peer pressure
 					to: local_peers
@@ -218,7 +227,7 @@ species introvert parent: people {
 	reflex init when: !init {
 		init <- true;
 		bartender bt <- one_of(bartender.population);
-		list<people> notsales <- extrovert.population + grouping.population + introvert.population;
+		list<people> notsales <- extrovert.population + police.population + introvert.population;
 		friends <- friends + bt;
 		loop while: length(friends) < 3 {
 			people nasta <- one_of(notsales);
@@ -285,8 +294,8 @@ species introvert parent: people {
 		}
 		
 		switch species_of(person) {
-			match grouping {
-				write "met grouping person";
+			match police {
+				write "met police";
 				// run away
 			}
 			match bartender {
@@ -320,58 +329,67 @@ species introvert parent: people {
 	}
 }
 
-species grouping parent: people {
-	float peer_pressure <- rnd(1.0, 2.0); // probability multiplier
-	int group_size <- rnd(3, 7);
-	int observed_sales <- 0;
+species police parent: people {
+	float max_drunkness_allowed <- rnd(5.0, 15.0); // maximum drunkness they allow others to be before throwing them out
+	int num_drunk_tolerance <- rnd(3, 7); // max number of drunk people before getting mad at bartender
+	float selling_suspicion <- 0.0; // value of suspicion towards salesperson
 	
-	reflex seek_group {
+	int num_drunk_encountered <- 0; // will keep count of number of too drunk guests encountered
+	
+	
+	reflex seek_group { // will go towards groups of people to inspect them
 		if (!travelling) {
 			list<extrovert> nearby_extroverts <- extrovert at_distance 15;
 			
-			if (!empty(nearby_extroverts) and length(nearby_extroverts) < group_size) {
+			if !empty(nearby_extroverts) {
 				point center_of_group <- mean(nearby_extroverts collect each.location);
 				target_dest <- center_of_group; 
 			}
 		}
 	}
 	
+	action warn(people p, string m) {
+		do start_conversation
+			to: [p]
+			protocol: 'fipa-propose'
+			performative: 'inform'
+			contents: [m]
+		;
+	}
+	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
 		
 		switch species_of(person) {
-			match extrovert {
-				write "met extrovert";
+			match bartender {
+				write "met bartender";
+				if (num_drunk_encountered > num_drunk_tolerance) {
+					do warn(people(person), 'Too many drunks! Be more strict');
+					num_drunk_encountered <- 0;
+					write 'Reporting in: The bartender has been asked to be stricter when serving';
+				}
 			}
 			match salesperson {
 				write "met salesperson";
+				selling_suspicion <- selling_suspicion + 0.3;
 				
-				if (observed_sales > 0 and flip(peer_pressure)) {
-					do start_conversation
-						to: [person] // seller
-						protocol: 'fipa-propose'
-						performative: 'propose'
-						contents: ['i will buy too']
-					;
-					
-					observed_sales <- 0;
+				if (selling_suspicion > 5.0) {
+					do warn(people(person), "That's it, I'm arresting you!");
+					ask person { do die; }
+					write "Reporting in: I've arrested a salesperson";
 				}
 			}
 			default {
 				write "met " + species_of(person);
+				
+				if [extrovert, introvert] contains species_of(person) and (people(person).drunkness > max_drunkness_allowed) {
+					num_drunk_encountered <- num_drunk_encountered + 1;
+					
+					do warn(people(person), 'You are too drunk! You need to leave');
+					write "Reporting in: I've asked a person to leave";
+				}
 			}
 		}
-	}
-	
-	reflex listen_to_influence when: !empty(informs) {
-		loop msg over: informs {
-			if (string(msg.contents) contains 'i bought') {
-				observed_sales <- observed_sales + 1;
-			} else if (string(msg.contents) contains 'here is your drink') {
-				drunkness <- drunkness + 0.5;
-			}
-		}
-		informs <- [];
 	}
 	
 } 
@@ -394,19 +412,6 @@ species bartender parent: people {
 				}
 			}
 			
-			match grouping {
-				write "met grouping person";
-				
-				if (grouping(person).drunkness < serving_tolerance) {
-					write "served customer";
-					do start_conversation
-						to: [person]
-						protocol: 'fipa-propose'
-						performative: 'inform'
-						contents: ['here is your drink']
-					;
-				}
-			}
 			default {
 				write "met " + species_of(person);
 			}
@@ -421,6 +426,13 @@ species bartender parent: people {
 			;	
 		}
 		
+	}
+	
+	reflex tighten_tolerance when: !empty(informs) { // when asked by police officer
+		message msg <- informs at 0;
+		if (string(list(msg.contents) at 0) contains "Be more strict") {
+			serving_tolerance <- serving_tolerance * 0.8;
+		}
 	}
 	
 	reflex move {
@@ -440,8 +452,8 @@ species bartender parent: people {
 
 species salesperson parent: people {
 	int selling_quota;
-	string target_demographic;
-	// trait #3
+	float risk_averse;
+	float territory_awareness;
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
@@ -471,7 +483,7 @@ experiment festival_traffic type: gui {
 		display festival_display type: 2d {
 			species extrovert aspect: base;
 			species introvert aspect: base;
-			species grouping aspect: base;
+			species police aspect: base;
 			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
