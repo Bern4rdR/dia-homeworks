@@ -154,8 +154,8 @@ species people skills: [moving, fipa] {
 
 species extrovert parent: people {
 	float generocity <- rnd(1.0, 2.0); // probability multiplier
-	float networking_skills;
-	// trait #3
+	float networking_skills <- rnd(2.0, 5.0);
+	int ideal_group_size <- rnd(3, 7);
 	
 	reflex encounter when: !empty(people at_distance 2) {
 		agent person <- one_of(people at_distance 2);
@@ -174,10 +174,15 @@ species extrovert parent: people {
 				;
 			}
 			
+			match bartender {
+				write 'met bartender';
+				do buy_beer(bartender(person));
+			}
+			
 			match salesperson {
 				write "met salesperson";
 				
-				if (rnd(0, generocity) < 0.5) { return; }
+				if (rnd(0, generocity) < 0.5 or rnd(1.0, 8.0) > networking_skills) { return; }
 				
 				do start_conversation
 					to: [person]
@@ -202,10 +207,27 @@ species extrovert parent: people {
 		}
 	}
 	
-	reflex recv  when: !empty(informs) {
+	reflex find_group when: length(people at_distance 5) < ideal_group_size {
+		if (travelling) { return; }
+		
+		list<people> nearby_people <- people at_distance 25;
+		
+		if (!empty(nearby_people)) {
+			target_dest <- one_of(nearby_people).location;
+			travelling <- true;
+		}
+	}
+	
+	reflex recv when: !empty(informs) {
 		message msg <- informs at 0;
 		if (string(msg.contents) contains 'here is your drink') {
 			drunkness <- drunkness + 1;
+		}
+	}
+	
+	reflex sales when: !empty(proposes) {
+		loop msg over: proposes {
+			
 		}
 	}
 }
@@ -286,8 +308,13 @@ species introvert parent: people {
 		}
 	}
 	
+	reflex recover when: agent_closest_to(self) distance_to location > 1 {
+		tiredness <- tiredness + 0.1;
+	}
+	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
+		tiredness <- tiredness + 0.1;
 		
 		if species_of(person) != introvert {
 			do drop_social_capacity;
@@ -304,13 +331,13 @@ species introvert parent: people {
 				do buy_beer(bartender(person));
 			}
 			match salesperson {
-				// run away
 				write "met salesperson";
+				// do social capacity check
 				do run_away(person.location, true);
 			}
 			match extrovert {
 				write "met extrovert";
-				// run away
+				// do social capacity check
 				do run_away(person.location, false);
 			}
 			match introvert {
@@ -321,6 +348,18 @@ species introvert parent: people {
 				write "met " + species_of(person);
 			}
 		}
+	}
+	
+	reflex buy_wares when: !empty(proposes) {
+		loop offer over: proposes {
+			if rnd(1.0, 10.0) > tiredness {
+				do accept_proposal
+					message: offer
+					contents: ['I will buy from you']
+				;
+			}
+		}
+				
 	}
 	
 	aspect base {
@@ -397,33 +436,53 @@ species police parent: people {
 species bartender parent: people {
 	float serving_tolerance <- rnd(2.0, 4.5);
 	float charm_tolerance <- rnd(1.0, 5.0);
-	bar my_bar <- nil;
 	// trait #3
 	
-	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
-		agent person <- agent_closest_to(self);
-		
-		switch species_of(person) {
-			match extrovert {
-				write "met extrovert";
-				
-				if (extrovert(person).drunkness < serving_tolerance or extrovert(person).networking_skills > charm_tolerance) {
-					write "served customer";
-				}
-			}
-			
-			default {
-				write "met " + species_of(person);
-			}
-		}
-	}
+	bar my_bar <- nil;
 	
 	reflex sell_beer when: !empty(requests) {
 		loop msg over: requests { 
-			do accept_proposal
-				message: msg
-				contents: ['Enjoy, tack!']
-			;	
+			agent sender <- agent(msg.sender);
+			
+			switch species_of(sender) {
+				match extrovert {
+					write 'met extrovert';
+				
+					if (extrovert(sender).drunkness < serving_tolerance or extrovert(sender).networking_skills > charm_tolerance) {
+						do accept_proposal
+							message: msg
+							contents: ['Enjoy, tack!']
+						;
+						write 'served customer';
+					} else {
+						do start_conversation
+							to: [sender]
+							protocol: 'fipa-propose'
+							performative: 'inform'
+							contents: ['I cannot serve you']
+						;
+					}
+				}
+				match introvert {
+					write "met introvert";
+					
+					if (introvert(sender).drunkness < serving_tolerance) {
+						do accept_proposal
+							message: msg
+							contents: ['Enjoy, tack!']
+						;
+					} else {
+						do start_conversation
+							to: [sender]
+							protocol: 'fipa-propose'
+							performative: 'inform'
+							contents: ['I cannot serve you']
+						;
+					}
+				}
+			}
+			
+				
 		}
 		
 	}
@@ -451,9 +510,9 @@ species bartender parent: people {
 }
 
 species salesperson parent: people {
-	int selling_quota;
-	float risk_averse;
-	float territory_awareness;
+	int selling_quota <- rnd(5, 15);
+	float risk_averse <- rnd(0.5, 2.5);
+	float territory_awareness <- rnd(1.0, 5.0);
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
@@ -461,13 +520,48 @@ species salesperson parent: people {
 		switch species_of(person) {
 			match introvert {
 				write "met introvert";
+				if (selling_quota > 0) {
+					do ask_to_buy(person);
+				}
 			}
 			match bartender {
 				write "met bartender";
+				do buy_beer(bartender(person));
+			}
+			match police {
+				write 'avoiding police';
+				target_dest <- location + (location - person.location) * risk_averse;
+				travelling <- true;
 			}
 			default {
 				write "met " + species_of(person);
 			}
+		}
+	}
+	
+	reflex maintain_territory when: !empty(salesperson at_distance territory_awareness) {
+		list<salesperson> competitors <- salesperson at_distance territory_awareness;
+		target_dest <- location + (location - one_of(competitors).location) * risk_averse;
+		travelling <- true;
+	}
+	
+	action ask_to_buy(agent target) {
+		do start_conversation
+			to: [target]
+			protocol: 'fipa-propose'
+			performative: 'propose'
+			contents: ['Do you want to buy my wares?']
+		;
+	}
+	
+	reflex sell when: !empty(accept_proposals) or !empty(proposes) {
+		loop yes over: accept_proposals {
+			list<string> tmp_msg <- yes.contents; // clear message from queue
+			selling_quota <- selling_quota - 1; 
+		}
+		loop yes over: proposes {
+			list<string> tmp_msg <- yes.contents; // clear message from queue
+			selling_quota <- selling_quota - 1;
 		}
 	}
 }
