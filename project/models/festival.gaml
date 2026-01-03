@@ -510,29 +510,68 @@ species bartender parent: people {
 }
 
 species salesperson parent: people {
-	int selling_quota <- rnd(5, 15);
+	bool oportunistic_find <- false;
 	float risk_averse <- rnd(0.5, 2.5);
 	float territory_awareness <- rnd(1.0, 5.0);
+	agent last_interaction;
+	
+	
+	
+   reflex find_oportunistic_person when: oportunistic_find and !travelling { // prefer extroverts based on distance
+
+
+   agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
+   agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
+   agent final_target;
+   
+   float dist_extro <- self distance_to closest_extrovert;
+    float dist_other <- self distance_to closest_other;
+    
+    float probability <- (dist_extro < dist_other) ? 0.75 : 0.25;
+
+	if (flip(probability)) {
+	    final_target <- closest_extrovert;
+	} else {
+	    final_target <- closest_other;
+	}
+	
+	target_dest <- final_target.location;
+	travelling <- true;	
+   }
+   
+   reflex find_person when: !oportunistic_find and !travelling  { // no preferences
+   	agent closest <- agents where (species(each) != police and each != last_interaction) closest_to self;
+   	target_dest <- closest.location;
+   	travelling <- true;
+   	
+   }
+   
+   reflex avoid_police when: !empty(police at_distance (10.0*risk_averse)) {
+	   	agent closest <- police closest_to self;
+	   	target_dest <- location + (location - closest.location);
+	   	travelling <- true;
+   }
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
 		agent person <- agent_closest_to(self);
 		
 		switch species_of(person) {
 			match introvert {
+				
 				write "met introvert";
-				if (selling_quota > 0) {
+				if (length(introvert at_distance 5) >= 2) {
 					do ask_to_buy(person);
 				}
+			}
+			match extrovert {
+				write "met extrovert";
+				do ask_to_buy(person);
 			}
 			match bartender {
 				write "met bartender";
 				do buy_beer(bartender(person));
 			}
-			match police {
-				write 'avoiding police';
-				target_dest <- location + (location - person.location) * risk_averse;
-				travelling <- true;
-			}
+			
 			default {
 				write "met " + species_of(person);
 			}
@@ -557,11 +596,9 @@ species salesperson parent: people {
 	reflex sell when: !empty(accept_proposals) or !empty(proposes) {
 		loop yes over: accept_proposals {
 			list<string> tmp_msg <- yes.contents; // clear message from queue
-			selling_quota <- selling_quota - 1; 
 		}
 		loop yes over: proposes {
 			list<string> tmp_msg <- yes.contents; // clear message from queue
-			selling_quota <- selling_quota - 1;
 		}
 	}
 }
