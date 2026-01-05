@@ -8,7 +8,8 @@ global {
 	
 	int num_people <- 50;
 	
-	list<point> stage_locations <- [[20, 20], [40, 40], [60, 60], [80, 80]];
+	list<point> bar_locations <- [[20, 20], [40, 40], [60, 60], [80, 80], [100,100]];
+	list<point> stage_locations <- [[0, 20], [0, 40], [0, 60], [0, 80]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
@@ -17,9 +18,9 @@ global {
 	
 	
 	init {
-		loop i from: 0 to: 3 {
+		loop i from: 0 to: 4 {
 			create bar {
-				location <- stage_locations at i-1;
+				location <- bar_locations at i-1;
 				radians <- i*90.0;
 			}
 		}
@@ -34,7 +35,19 @@ global {
 			}
 		}
 		
-		create extrovert number: num_people/5 { color <- #yellow; }
+		int counter <- 0;
+		loop loc over: stage_locations {
+			create stage {
+				location <- loc;
+				lights <- light_vals at counter;
+				sound <- sound_vals at counter;
+				video <- video_vals at counter;
+				guests <- people.population;
+			}
+			counter <- counter + 1;
+			}
+		
+		create extrovert number: 2*(num_people/5) { color <- #yellow; }
 		create introvert number: num_people/5 { color <- #red; }
 		create police number: num_people/5 { color <- #blue; }
 //		create bartender number: num_people/5 { color <- #brown; }
@@ -44,6 +57,7 @@ global {
 		
 		
 	}
+
 	
 //	reflex save_training_data when: (cycle mod 1 = 0) {
 //		list<point> locations <- [];
@@ -55,6 +69,35 @@ global {
 //			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
 //		
 //	}
+}
+
+species stage skills: [fipa] {
+	rgb color <- #blue;
+	float lights;
+	float sound;
+	float video;
+	
+	bool hasBroadcasted <- false;
+	point position;
+	list<agent> guests;
+	
+	reflex inform when: !hasBroadcasted {
+		write "broadcasting";
+		loop g over: guests {
+			do start_conversation
+				to: [g]
+				protocol: 'fipa_propose'
+				performative: 'inform'
+				contents: [lights, sound, video, location]
+			;
+		}
+		hasBroadcasted <- true;
+	}
+
+	
+	aspect base {
+		draw square(3) color: color ;
+	}
 }
 
 species bar skills: [moving] {
@@ -581,6 +624,7 @@ experiment festival_traffic type: gui {
 			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
+			species stage aspect: base;
 		}
 	}
 }
