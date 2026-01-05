@@ -34,11 +34,10 @@ global {
 			}
 		}
 		
-		create extrovert number: num_people/5 { color <- #yellow; }
-		create introvert number: num_people/5 { color <- #red; }
-		create police number: num_people/5 { color <- #blue; }
-//		create bartender number: num_people/5 { color <- #brown; }
-		create salesperson number: num_people/5 { color <- #green; }
+		create extrovert number: num_people/4 { color <- #yellow; }
+		create introvert number: num_people/4 { color <- #red; }
+		create police number: num_people/4 { color <- #blue; }
+		create salesperson number: num_people/4 { color <- #green; }
 
 		all_people <- people.population;
 		
@@ -436,7 +435,7 @@ species police parent: people {
 species bartender parent: people {
 	float serving_tolerance <- rnd(2.0, 4.5);
 	float charm_tolerance <- rnd(1.0, 5.0);
-	// trait #3
+	float irritation <- 0.0;
 	
 	bar my_bar <- nil;
 	
@@ -480,11 +479,26 @@ species bartender parent: people {
 						;
 					}
 				}
-			}
-			
-				
+				match salesperson {
+					write 'met salesperson';
+					irritation <- irritation + 0.1;
+					
+					if (salesperson(sender).drunkness < serving_tolerance and irritation < 5.0) {
+						do accept_proposal
+							message: msg
+							contents: ['Enjoy, tack!']
+						;
+					} else {
+						do start_conversation
+							to: [sender]
+							protocol: 'fipa-propose'
+							performative: 'inform'
+							contents: ['You are disturbing the other customers! I cannot serve you']
+						;
+					}
+				}
+			}	
 		}
-		
 	}
 	
 	reflex tighten_tolerance when: !empty(informs) { // when asked by police officer
