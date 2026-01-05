@@ -9,7 +9,7 @@ global {
 	int num_people <- 50;
 	
 	list<point> bar_locations <- [[20, 20], [40, 40], [60, 60], [80, 80], [100,100]];
-	list<point> stage_locations <- [[0, 20], [0, 40], [0, 60], [0, 80]];
+	list<point> stage_locations <- [[10, 30], [10, 70]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
@@ -128,7 +128,7 @@ species people skills: [moving, fipa] {
 	
 	float drunkness <- 0.0;
 
-	reflex select_stage when: cycle mod 120 = 0 {
+	reflex select_bar when: cycle mod 120 = 0 {
 		my_choice <- one_of(all_bars);
 //		write "choice: " + my_choice.radians;
 	}
@@ -137,6 +137,16 @@ species people skills: [moving, fipa] {
 		if target_dest = nil {
 			do wander;
 		}
+	}
+	
+	reflex select_stage when: stage closest_to self distance_to self > 10 and flip(0.01) {
+		target_dest <- one_of(stage).location;
+	}
+	
+	reflex stage_sober when: stage closest_to self distance_to self <= 10 and flip(0.5){
+		drunkness <- drunkness * 0.5;
+		if flip(0.75){	my_choice <- one_of(all_bars);}
+		
 	}
 	
 	
@@ -184,7 +194,7 @@ species people skills: [moving, fipa] {
 	
 	reflex asked_to_leave when: !empty(informs) {
 		message msg <- informs at 0;
-		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.8) { // has a 20% chance to defy
+		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.98) { // has a 2% chance to defy
 			do die;
 		}
 	}
@@ -327,6 +337,10 @@ species introvert parent: people {
 		hist_path <- hist_path + location;
 	}
 	
+	reflex escape when: (cycle mod 1000 = 0){
+		do goto target: one_of(all_bars).location;
+	}  
+	
 	reflex escape_reset when: escaping and location distance_to target_dest < 0.5 {
 		target_dest <- goal;
 		escaping <- false;
@@ -351,8 +365,12 @@ species introvert parent: people {
 		}
 	}
 	
+	reflex select_stage {
+		// do nothing
+	}
+	
 	reflex recover when: agent_closest_to(self) distance_to location > 1 {
-		tiredness <- tiredness + 0.1;
+		tiredness <- tiredness - 0.1;
 	}
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
@@ -618,13 +636,13 @@ experiment festival_traffic type: gui {
 	
 	output {
 		display festival_display type: 2d {
+			species stage aspect: base;
+			species bar aspect: base;
 			species extrovert aspect: base;
 			species introvert aspect: base;
 			species police aspect: base;
-			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
-			species stage aspect: base;
 		}
 	}
 }
