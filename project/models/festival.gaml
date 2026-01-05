@@ -256,8 +256,11 @@ species introvert parent: people {
 				friends <- friends + nasta;
 			} 
 		}
-		goal <- (friends at 0).location;
-		remove from: friends index: 0;
+		if (!empty(friends)) {
+			goal <- (friends at 0).location;
+			remove from: friends index: 0;	
+		}
+		
 	}
 	
 	action run_away(point ploc, bool always_run) {
@@ -442,6 +445,11 @@ species bartender parent: people {
 	reflex sell_beer when: !empty(requests) {
 		loop msg over: requests { 
 			agent sender <- agent(msg.sender);
+			
+			
+			if dead(sender) {
+				continue;
+			}
 			
 			switch species_of(sender) {
 				match extrovert {
@@ -632,6 +640,12 @@ experiment festival_traffic type: gui {
 			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
+		}
+		display "Global Drunkness" {
+			chart "Average Drunkness over time" type: series {
+				data "Avg Drunkness" value: mean((introvert + extrovert + salesperson) collect each.drunkness) color: #blue;
+				data "Max Drunkness" value: max((introvert + extrovert + salesperson) collect each.drunkness) color: #gray;
+			}
 		}
 	}
 }
