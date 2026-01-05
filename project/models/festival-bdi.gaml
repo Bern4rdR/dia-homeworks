@@ -8,8 +8,7 @@ global {
 	
 	int num_people <- 50;
 	
-	list<point> bar_locations <- [[20, 20], [40, 40], [60, 60], [80, 80], [100,100]];
-	list<point> stage_locations <- [[10, 30], [10, 70]];
+	list<point> stage_locations <- [[20, 20], [40, 40], [60, 60], [80, 80]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
@@ -18,9 +17,9 @@ global {
 	
 	
 	init {
-		loop i from: 0 to: 4 {
+		loop i from: 0 to: 3 {
 			create bar {
-				location <- bar_locations at i-1;
+				location <- stage_locations at i-1;
 				radians <- i*90.0;
 			}
 		}
@@ -35,28 +34,16 @@ global {
 			}
 		}
 		
-		int counter <- 0;
-		loop loc over: stage_locations {
-			create stage {
-				location <- loc;
-				lights <- light_vals at counter;
-				sound <- sound_vals at counter;
-				video <- video_vals at counter;
-				guests <- people.population;
-			}
-			counter <- counter + 1;
-			}
-		
-		create extrovert number: 2*(num_people/4) { color <- #yellow; }
-		create introvert number: num_people/4 { color <- #red; }
-		create police number: num_people/4 { color <- #blue; }
-		create salesperson number: num_people/4 { color <- #green; }
+		create extrovert number: num_people/5 { color <- #yellow; }
+		create introvert number: num_people/5 { color <- #red; }
+		create police number: num_people/5 { color <- #blue; }
+//		create bartender number: num_people/5 { color <- #brown; }
+		create salesperson number: num_people/5 { color <- #green; }
 
 		all_people <- people.population;
 		
 		
 	}
-
 	
 //	reflex save_training_data when: (cycle mod 1 = 0) {
 //		list<point> locations <- [];
@@ -68,35 +55,6 @@ global {
 //			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
 //		
 //	}
-}
-
-species stage skills: [fipa] {
-	rgb color <- #blue;
-	float lights;
-	float sound;
-	float video;
-	
-	bool hasBroadcasted <- false;
-	point position;
-	list<agent> guests;
-	
-	reflex inform when: !hasBroadcasted {
-		write "broadcasting";
-		loop g over: guests {
-			do start_conversation
-				to: [g]
-				protocol: 'fipa_propose'
-				performative: 'inform'
-				contents: [lights, sound, video, location]
-			;
-		}
-		hasBroadcasted <- true;
-	}
-
-	
-	aspect base {
-		draw square(3) color: color ;
-	}
 }
 
 species bar skills: [moving] {
@@ -127,7 +85,7 @@ species people skills: [moving, fipa] {
 	
 	float drunkness <- 0.0;
 
-	reflex select_bar when: cycle mod 120 = 0 {
+	reflex select_stage when: cycle mod 120 = 0 {
 		my_choice <- one_of(all_bars);
 //		write "choice: " + my_choice.radians;
 	}
@@ -136,16 +94,6 @@ species people skills: [moving, fipa] {
 		if target_dest = nil {
 			do wander;
 		}
-	}
-	
-	reflex select_stage when: stage closest_to self distance_to self > 10 and flip(0.01) {
-		target_dest <- one_of(stage).location;
-	}
-	
-	reflex stage_sober when: stage closest_to self distance_to self <= 10 and flip(0.5){
-		drunkness <- drunkness * 0.5;
-		if flip(0.75){	my_choice <- one_of(all_bars);}
-		
 	}
 	
 	
@@ -193,7 +141,7 @@ species people skills: [moving, fipa] {
 	
 	reflex asked_to_leave when: !empty(informs) {
 		message msg <- informs at 0;
-		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.98) { // has a 2% chance to defy
+		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.8) { // has a 20% chance to defy
 			do die;
 		}
 	}
@@ -309,11 +257,8 @@ species introvert parent: people {
 				friends <- friends + nasta;
 			} 
 		}
-		if (!empty(friends)) {
-			goal <- (friends at 0).location;
-			remove from: friends index: 0;	
-		}
-		
+		goal <- (friends at 0).location;
+		remove from: friends index: 0;
 	}
 	
 	action run_away(point ploc, bool always_run) {
@@ -339,10 +284,6 @@ species introvert parent: people {
 		hist_path <- hist_path + location;
 	}
 	
-	reflex escape when: (cycle mod 1000 = 0){
-		do goto target: one_of(all_bars).location;
-	}  
-	
 	reflex escape_reset when: escaping and location distance_to target_dest < 0.5 {
 		target_dest <- goal;
 		escaping <- false;
@@ -367,12 +308,8 @@ species introvert parent: people {
 		}
 	}
 	
-	reflex select_stage {
-		// do nothing
-	}
-	
 	reflex recover when: agent_closest_to(self) distance_to location > 1 {
-		tiredness <- tiredness - 0.1;
+		tiredness <- tiredness + 0.1;
 	}
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
@@ -499,18 +436,13 @@ species police parent: people {
 species bartender parent: people {
 	float serving_tolerance <- rnd(2.0, 4.5);
 	float charm_tolerance <- rnd(1.0, 5.0);
-	float irritation <- 0.0;
+	// trait #3
 	
 	bar my_bar <- nil;
 	
 	reflex sell_beer when: !empty(requests) {
 		loop msg over: requests { 
 			agent sender <- agent(msg.sender);
-			
-			
-			if dead(sender) {
-				continue;
-			}
 			
 			switch species_of(sender) {
 				match extrovert {
@@ -548,26 +480,11 @@ species bartender parent: people {
 						;
 					}
 				}
-				match salesperson {
-					write 'met salesperson';
-					irritation <- irritation + 0.1;
-					
-					if (salesperson(sender).drunkness < serving_tolerance and irritation < 5.0) {
-						do accept_proposal
-							message: msg
-							contents: ['Enjoy, tack!']
-						;
-					} else {
-						do start_conversation
-							to: [sender]
-							protocol: 'fipa-propose'
-							performative: 'inform'
-							contents: ['You are disturbing the other customers! I cannot serve you']
-						;
-					}
-				}
-			}	
+			}
+			
+				
 		}
+		
 	}
 	
 	reflex tighten_tolerance when: !empty(informs) { // when asked by police officer
@@ -592,82 +509,114 @@ species bartender parent: people {
 	}
 }
 
-species salesperson parent: people {
-	bool oportunistic_find <- false;
-	float risk_averse <- rnd(0.5, 2.5);
-	float territory_awareness <- rnd(1.0, 5.0);
-	agent last_interaction;
-	
-	
-	
-   reflex find_oportunistic_person when: oportunistic_find and !travelling { // prefer extroverts based on distance
+species salesperson parent: people control: simple_bdi {
 
-
-   agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
-   agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
-   agent final_target;
-   
-   float dist_extro <- self distance_to closest_extrovert;
-    float dist_other <- self distance_to closest_other;
+    bool opportunistic_find <- false;
+    float risk_averse <- rnd(0.5, 2.5);
+    float territory_awareness <- rnd(1.0, 5.0);
+    agent last_interaction;
     
-    float probability <- (dist_extro < dist_other) ? 0.75 : 0.25;
+    // BDI Attributes
+    predicate find_customers <- new_predicate("Find people to sell stuff to");
+    predicate sell_stuff <- new_predicate("sell stuff");
+    predicate avoid_police <- new_predicate("avoid the police");
+    predicate maintain_teritory <- new_predicate("Maintain own territory");
+    
 
-	if (flip(probability)) {
-	    final_target <- closest_extrovert;
-	} else {
-	    final_target <- closest_other;
-	}
-	
-	target_dest <- final_target.location;
-	travelling <- true;	
-   }
-   
-   reflex find_person when: !oportunistic_find and !travelling  { // no preferences
-   	agent closest <- agents where (species(each) != police and each != last_interaction) closest_to self;
-   	target_dest <- closest.location;
-   	travelling <- true;
-   	
-   }
-   
-   reflex avoid_police when: !empty(police at_distance (10.0*risk_averse)) {
-	   	agent closest <- police closest_to self;
-	   	target_dest <- location + (location - closest.location);
-	   	travelling <- true;
-   }
-	
-	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
-		agent person <- agent_closest_to(self);
-		
-		switch species_of(person) {
-			match introvert {
-				
-				write "met introvert";
-				if (length(introvert at_distance 5) >= 2) {
-					do ask_to_buy(person);
-				}
-			}
-			match extrovert {
-				write "met extrovert";
-				do ask_to_buy(person);
-			}
-			match bartender {
-				write "met bartender";
-				do buy_beer(bartender(person));
-			}
-			
-			default {
-				write "met " + species_of(person);
-			}
-		}
-	}
-	
-	reflex maintain_territory when: !empty(salesperson at_distance territory_awareness) {
-		list<salesperson> competitors <- salesperson at_distance territory_awareness;
-		target_dest <- location + (location - one_of(competitors).location) * risk_averse;
-		travelling <- true;
-	}
-	
-	action ask_to_buy(agent target) {
+    // Beliefs & Desires Setup
+    init {
+        // The agent starts with the desire to find customers
+        do add_desire(predicate: find_customers);
+    }
+
+    // --- PERCEPTION STEP ---
+    // Instead of reflexes, BDI uses perception to update beliefs
+    perceive target: police in: (10.0 * risk_averse) {
+        focus id: "police_nearby" truth: true;        
+        }
+    
+    perceive target: salesperson in: territory_awareness {
+        focus id: "competitor_nearby" truth: true;    }
+    
+    perceive target: agents where (each distance_to self <= 1.0 and species(each) != police and each != last_interaction) {
+    	focus id: "customer_nearby" truth: true; 
+    	
+    }
+    
+    
+    // --- RULES --- Activate desires based on current beliefs
+    rule belief: new_predicate("competitor_nearby") new_desire: maintain_teritory strength: 5.0;
+    rule belief: new_predicate("police_nearby") new_desire: avoid_police strength: 10.0;
+    rule belief: new_predicate("customer_nearby") new_desire: sell_stuff strength: 2.0;
+    
+    
+    
+
+    // --- PLANS ---
+
+    // Plan: Avoid Police (High Priority)
+    plan flee_police intention: avoid_police priority: 10 finished_when: empty(police at_distance (10.0 * risk_averse)){
+        agent closest_cop <- police closest_to self;
+        if (closest_cop != nil) {
+            target_dest <- location + (location - closest_cop.location);
+            do goto target: target_dest speed: 2.0;
+        }
+        // Remove desire once safe
+        if (empty(police at_distance (10.0 * risk_averse))) {
+            do remove_intention(avoid_police, true);
+        }
+    }
+
+    // Plan: Maintain Territory
+    plan push_back intention: maintain_teritory priority: 5  {
+        list<salesperson> competitors <- salesperson at_distance territory_awareness;
+        if (!empty(competitors)) {
+            target_dest <- location + (location - one_of(competitors).location) * risk_averse;
+            do goto target: target_dest;
+        } else {
+            do remove_intention(maintain_teritory, true);
+        }
+    }
+
+    // Plan: Finding a target (Opportunistic)
+    plan search_customer intention: find_customers when: opportunistic_find priority: 1 {
+        agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
+        agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
+        
+        if (closest_extrovert != nil and closest_other != nil) {
+            float d_extro <- self distance_to closest_extrovert;
+            float d_other <- self distance_to closest_other;
+            float prob <- (d_extro < d_other) ? 0.75 : 0.25;
+            
+            agent final_target <- flip(prob) ? closest_extrovert : closest_other;
+            do goto target: final_target.location;
+        }
+    }
+
+    // Plan: Standard Search
+    plan search_simple intention: find_customers when: !opportunistic_find priority: 1 {
+        agent closest <- (agents where (species(each) != police and species(each) != salesperson and each != last_interaction)) closest_to self;
+        if (closest != nil) {
+            do goto target: closest.location;
+        }
+    }
+    
+    // Plan: Interaction (When close to someone)
+    // This triggers when the agent is close to its intention target
+    plan encounter intention: sell_stuff priority: 2 {
+        agent person <- agents_at_distance(1.0) first_with (species(each) != species(self) and species(each) != police);
+        if (person != nil) {
+            last_interaction <- person;
+            // Logic for specific species remains the same
+            if (species(person) = extrovert) {
+                do ask_to_buy(person);
+            } else if (species(person) = introvert and length(introvert at_distance 5) >= 2) {
+                do ask_to_buy(person);
+            }
+        }
+    }
+    
+    action ask_to_buy(agent target) {
 		do start_conversation
 			to: [target]
 			protocol: 'fipa-propose'
@@ -695,19 +644,12 @@ experiment festival_traffic type: gui {
 	
 	output {
 		display festival_display type: 2d {
-			species stage aspect: base;
-			species bar aspect: base;
 			species extrovert aspect: base;
 			species introvert aspect: base;
 			species police aspect: base;
+			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
-		}
-		display "Global Drunkness" {
-			chart "Average Drunkness over time" type: series {
-				data "Avg Drunkness" value: mean((introvert + extrovert + salesperson) collect each.drunkness) color: #blue;
-				data "Max Drunkness" value: max((introvert + extrovert + salesperson) collect each.drunkness) color: #gray;
-			}
 		}
 	}
 }
