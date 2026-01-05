@@ -517,6 +517,7 @@ species salesperson parent: people control: simple_bdi {
     agent last_interaction;
     
     // BDI Attributes
+    predicate find_customers <- new_predicate("Find people to sell stuff to");
     predicate sell_stuff <- new_predicate("sell stuff");
     predicate avoid_police <- new_predicate("avoid the police");
     predicate maintain_teritory <- new_predicate("Maintain own territory");
@@ -525,7 +526,7 @@ species salesperson parent: people control: simple_bdi {
     // Beliefs & Desires Setup
     init {
         // The agent starts with the desire to find customers
-        do add_desire(predicate: sell_stuff);
+        do add_desire(predicate: find_customers);
     }
 
     // --- PERCEPTION STEP ---
@@ -537,18 +538,24 @@ species salesperson parent: people control: simple_bdi {
     perceive target: salesperson in: territory_awareness {
         focus id: "competitor_nearby" truth: true;    }
     
+    perceive target: agents where (each distance_to self <= 1.0 and species(each) != police and each != last_interaction) {
+    	focus id: "customer_nearby" truth: true; 
+    	
+    }
     
     
     // --- RULES --- Activate desires based on current beliefs
     rule belief: new_predicate("competitor_nearby") new_desire: maintain_teritory strength: 5.0;
     rule belief: new_predicate("police_nearby") new_desire: avoid_police strength: 10.0;
+    rule belief: new_predicate("customer_nearby") new_desire: sell_stuff strength: 2.0;
+    
     
     
 
     // --- PLANS ---
 
     // Plan: Avoid Police (High Priority)
-    plan flee_police intention: avoid_police priority: 10 {
+    plan flee_police intention: avoid_police priority: 10 finished_when: empty(police at_distance (10.0 * risk_averse)){
         agent closest_cop <- police closest_to self;
         if (closest_cop != nil) {
             target_dest <- location + (location - closest_cop.location);
@@ -561,7 +568,7 @@ species salesperson parent: people control: simple_bdi {
     }
 
     // Plan: Maintain Territory
-    plan push_back intention: maintain_teritory priority: 5 {
+    plan push_back intention: maintain_teritory priority: 5  {
         list<salesperson> competitors <- salesperson at_distance territory_awareness;
         if (!empty(competitors)) {
             target_dest <- location + (location - one_of(competitors).location) * risk_averse;
@@ -572,7 +579,7 @@ species salesperson parent: people control: simple_bdi {
     }
 
     // Plan: Finding a target (Opportunistic)
-    plan search_customer intention: sell_stuff when: opportunistic_find {
+    plan search_customer intention: find_customers when: opportunistic_find priority: 1 {
         agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
         agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
         
@@ -587,16 +594,16 @@ species salesperson parent: people control: simple_bdi {
     }
 
     // Plan: Standard Search
-    plan search_simple intention: sell_stuff when: !opportunistic_find {
+    plan search_simple intention: find_customers when: !opportunistic_find priority: 1 {
         agent closest <- (agents where (species(each) != police and species(each) != salesperson and each != last_interaction)) closest_to self;
         if (closest != nil) {
             do goto target: closest.location;
         }
     }
-
+    
     // Plan: Interaction (When close to someone)
     // This triggers when the agent is close to its intention target
-    reflex encounter when: !empty(agents_at_distance(1.0)) {
+    plan encounter intention: sell_stuff priority: 2 {
         agent person <- agents_at_distance(1.0) first_with (species(each) != species(self) and species(each) != police);
         if (person != nil) {
             last_interaction <- person;
