@@ -509,82 +509,114 @@ species bartender parent: people {
 	}
 }
 
-species salesperson parent: people {
-	bool oportunistic_find <- false;
-	float risk_averse <- rnd(0.5, 2.5);
-	float territory_awareness <- rnd(1.0, 5.0);
-	agent last_interaction;
-	
-	
-	
-   reflex find_oportunistic_person when: oportunistic_find and !travelling { // prefer extroverts based on distance
+species salesperson parent: people control: simple_bdi {
 
-
-   agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
-   agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
-   agent final_target;
-   
-   float dist_extro <- self distance_to closest_extrovert;
-    float dist_other <- self distance_to closest_other;
+    bool opportunistic_find <- false;
+    float risk_averse <- rnd(0.5, 2.5);
+    float territory_awareness <- rnd(1.0, 5.0);
+    agent last_interaction;
     
-    float probability <- (dist_extro < dist_other) ? 0.75 : 0.25;
+    // BDI Attributes
+    predicate find_customers <- new_predicate("Find people to sell stuff to");
+    predicate sell_stuff <- new_predicate("sell stuff");
+    predicate avoid_police <- new_predicate("avoid the police");
+    predicate maintain_teritory <- new_predicate("Maintain own territory");
+    
 
-	if (flip(probability)) {
-	    final_target <- closest_extrovert;
-	} else {
-	    final_target <- closest_other;
-	}
-	
-	target_dest <- final_target.location;
-	travelling <- true;	
-   }
-   
-   reflex find_person when: !oportunistic_find and !travelling  { // no preferences
-   	agent closest <- agents where (species(each) != police and each != last_interaction) closest_to self;
-   	target_dest <- closest.location;
-   	travelling <- true;
-   	
-   }
-   
-   reflex avoid_police when: !empty(police at_distance (10.0*risk_averse)) {
-	   	agent closest <- police closest_to self;
-	   	target_dest <- location + (location - closest.location);
-	   	travelling <- true;
-   }
-	
-	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
-		agent person <- agent_closest_to(self);
-		
-		switch species_of(person) {
-			match introvert {
-				
-				write "met introvert";
-				if (length(introvert at_distance 5) >= 2) {
-					do ask_to_buy(person);
-				}
-			}
-			match extrovert {
-				write "met extrovert";
-				do ask_to_buy(person);
-			}
-			match bartender {
-				write "met bartender";
-				do buy_beer(bartender(person));
-			}
-			
-			default {
-				write "met " + species_of(person);
-			}
-		}
-	}
-	
-	reflex maintain_territory when: !empty(salesperson at_distance territory_awareness) {
-		list<salesperson> competitors <- salesperson at_distance territory_awareness;
-		target_dest <- location + (location - one_of(competitors).location) * risk_averse;
-		travelling <- true;
-	}
-	
-	action ask_to_buy(agent target) {
+    // Beliefs & Desires Setup
+    init {
+        // The agent starts with the desire to find customers
+        do add_desire(predicate: find_customers);
+    }
+
+    // --- PERCEPTION STEP ---
+    // Instead of reflexes, BDI uses perception to update beliefs
+    perceive target: police in: (10.0 * risk_averse) {
+        focus id: "police_nearby" truth: true;        
+        }
+    
+    perceive target: salesperson in: territory_awareness {
+        focus id: "competitor_nearby" truth: true;    }
+    
+    perceive target: agents where (each distance_to self <= 1.0 and species(each) != police and each != last_interaction) {
+    	focus id: "customer_nearby" truth: true; 
+    	
+    }
+    
+    
+    // --- RULES --- Activate desires based on current beliefs
+    rule belief: new_predicate("competitor_nearby") new_desire: maintain_teritory strength: 5.0;
+    rule belief: new_predicate("police_nearby") new_desire: avoid_police strength: 10.0;
+    rule belief: new_predicate("customer_nearby") new_desire: sell_stuff strength: 2.0;
+    
+    
+    
+
+    // --- PLANS ---
+
+    // Plan: Avoid Police (High Priority)
+    plan flee_police intention: avoid_police priority: 10 finished_when: empty(police at_distance (10.0 * risk_averse)){
+        agent closest_cop <- police closest_to self;
+        if (closest_cop != nil) {
+            target_dest <- location + (location - closest_cop.location);
+            do goto target: target_dest speed: 2.0;
+        }
+        // Remove desire once safe
+        if (empty(police at_distance (10.0 * risk_averse))) {
+            do remove_intention(avoid_police, true);
+        }
+    }
+
+    // Plan: Maintain Territory
+    plan push_back intention: maintain_teritory priority: 5  {
+        list<salesperson> competitors <- salesperson at_distance territory_awareness;
+        if (!empty(competitors)) {
+            target_dest <- location + (location - one_of(competitors).location) * risk_averse;
+            do goto target: target_dest;
+        } else {
+            do remove_intention(maintain_teritory, true);
+        }
+    }
+
+    // Plan: Finding a target (Opportunistic)
+    plan search_customer intention: find_customers when: opportunistic_find priority: 1 {
+        agent closest_extrovert <- agents where (species(each) = extrovert and each != last_interaction) closest_to self;
+        agent closest_other <- agents where (species(each) != extrovert and species(each) != police and each != last_interaction) closest_to self;
+        
+        if (closest_extrovert != nil and closest_other != nil) {
+            float d_extro <- self distance_to closest_extrovert;
+            float d_other <- self distance_to closest_other;
+            float prob <- (d_extro < d_other) ? 0.75 : 0.25;
+            
+            agent final_target <- flip(prob) ? closest_extrovert : closest_other;
+            do goto target: final_target.location;
+        }
+    }
+
+    // Plan: Standard Search
+    plan search_simple intention: find_customers when: !opportunistic_find priority: 1 {
+        agent closest <- (agents where (species(each) != police and species(each) != salesperson and each != last_interaction)) closest_to self;
+        if (closest != nil) {
+            do goto target: closest.location;
+        }
+    }
+    
+    // Plan: Interaction (When close to someone)
+    // This triggers when the agent is close to its intention target
+    plan encounter intention: sell_stuff priority: 2 {
+        agent person <- agents_at_distance(1.0) first_with (species(each) != species(self) and species(each) != police);
+        if (person != nil) {
+            last_interaction <- person;
+            // Logic for specific species remains the same
+            if (species(person) = extrovert) {
+                do ask_to_buy(person);
+            } else if (species(person) = introvert and length(introvert at_distance 5) >= 2) {
+                do ask_to_buy(person);
+            }
+        }
+    }
+    
+    action ask_to_buy(agent target) {
 		do start_conversation
 			to: [target]
 			protocol: 'fipa-propose'

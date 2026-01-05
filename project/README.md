@@ -27,7 +27,7 @@
     - TBD
 - Bartender
     - drunk serving tolerance
-    - TBD
+    - charmed chance
     - TBD
 - Salseperson
     - police aversion
@@ -35,11 +35,10 @@
     - competitiveness
 
 **Rules**
+>Not sure if this is the right interpretation but it may only be necessary to have one rule for each combination of guests
 - Extrovert
-    - Introvert: TBD
-    - Police: TBD
-    - Bartender: TBD
-    - Salesperson: TBD
+    - Introvert: may offer a drink based on `generocity`
+    - Salesperson: may buy based on `generocity`
 - Introvert
     - Extrovert: Will start to avoid based on tiredness
     - Police: TBD
@@ -51,7 +50,7 @@
     - Bartender: TBD
     - Salesperson: TBD
 - Bartender
-    - Extrovert: TBD
+    - Extrovert: may still seell above `drunk serving tolerance` if they are easily `charmed`
     - Introvert: TBD
     - Police: TBD
     - Salesperson: TBD
