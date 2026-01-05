@@ -8,7 +8,8 @@ global {
 	
 	int num_people <- 50;
 	
-	list<point> stage_locations <- [[20, 20], [40, 40], [60, 60], [80, 80]];
+	list<point> bar_locations <- [[20, 20], [40, 40], [60, 60], [80, 80], [100,100]];
+	list<point> stage_locations <- [[10, 30], [10, 70]];
 	list<float> light_vals <- [1.0, 0.0, 0.0, 0.4];
 	list<float> sound_vals <- [0.0, 1.0, 0.0, 0.4];
 	list<float> video_vals <- [0.0, 0.0, 1.0, 0.4];
@@ -17,9 +18,9 @@ global {
 	
 	
 	init {
-		loop i from: 0 to: 3 {
+		loop i from: 0 to: 4 {
 			create bar {
-				location <- stage_locations at i-1;
+				location <- bar_locations at i-1;
 				radians <- i*90.0;
 			}
 		}
@@ -34,16 +35,28 @@ global {
 			}
 		}
 		
-		create extrovert number: num_people/5 { color <- #yellow; }
-		create introvert number: num_people/5 { color <- #red; }
-		create police number: num_people/5 { color <- #blue; }
-//		create bartender number: num_people/5 { color <- #brown; }
-		create salesperson number: num_people/5 { color <- #green; }
+		int counter <- 0;
+		loop loc over: stage_locations {
+			create stage {
+				location <- loc;
+				lights <- light_vals at counter;
+				sound <- sound_vals at counter;
+				video <- video_vals at counter;
+				guests <- people.population;
+			}
+			counter <- counter + 1;
+			}
+		
+		create extrovert number: 2*(num_people/4) { color <- #yellow; }
+		create introvert number: num_people/4 { color <- #red; }
+		create police number: num_people/4 { color <- #blue; }
+		create salesperson number: num_people/4 { color <- #green; }
 
 		all_people <- people.population;
 		
 		
 	}
+
 	
 //	reflex save_training_data when: (cycle mod 1 = 0) {
 //		list<point> locations <- [];
@@ -55,6 +68,35 @@ global {
 //			to: "data/pls"+cycle+".csv" format: "csv"; // lmao the documenation says this is "type" but it is actually "format"
 //		
 //	}
+}
+
+species stage skills: [fipa] {
+	rgb color <- #blue;
+	float lights;
+	float sound;
+	float video;
+	
+	bool hasBroadcasted <- false;
+	point position;
+	list<agent> guests;
+	
+	reflex inform when: !hasBroadcasted {
+		write "broadcasting";
+		loop g over: guests {
+			do start_conversation
+				to: [g]
+				protocol: 'fipa_propose'
+				performative: 'inform'
+				contents: [lights, sound, video, location]
+			;
+		}
+		hasBroadcasted <- true;
+	}
+
+	
+	aspect base {
+		draw square(3) color: color ;
+	}
 }
 
 species bar skills: [moving] {
@@ -85,7 +127,7 @@ species people skills: [moving, fipa] {
 	
 	float drunkness <- 0.0;
 
-	reflex select_stage when: cycle mod 120 = 0 {
+	reflex select_bar when: cycle mod 120 = 0 {
 		my_choice <- one_of(all_bars);
 //		write "choice: " + my_choice.radians;
 	}
@@ -94,6 +136,16 @@ species people skills: [moving, fipa] {
 		if target_dest = nil {
 			do wander;
 		}
+	}
+	
+	reflex select_stage when: stage closest_to self distance_to self > 10 and flip(0.01) {
+		target_dest <- one_of(stage).location;
+	}
+	
+	reflex stage_sober when: stage closest_to self distance_to self <= 10 and flip(0.5){
+		drunkness <- drunkness * 0.5;
+		if flip(0.75){	my_choice <- one_of(all_bars);}
+		
 	}
 	
 	
@@ -141,7 +193,7 @@ species people skills: [moving, fipa] {
 	
 	reflex asked_to_leave when: !empty(informs) {
 		message msg <- informs at 0;
-		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.8) { // has a 20% chance to defy
+		if (string(list(msg.contents) at 0) contains 'You need to leave') and flip(0.98) { // has a 2% chance to defy
 			do die;
 		}
 	}
@@ -257,8 +309,11 @@ species introvert parent: people {
 				friends <- friends + nasta;
 			} 
 		}
-		goal <- (friends at 0).location;
-		remove from: friends index: 0;
+		if (!empty(friends)) {
+			goal <- (friends at 0).location;
+			remove from: friends index: 0;	
+		}
+		
 	}
 	
 	action run_away(point ploc, bool always_run) {
@@ -284,6 +339,10 @@ species introvert parent: people {
 		hist_path <- hist_path + location;
 	}
 	
+	reflex escape when: (cycle mod 1000 = 0){
+		do goto target: one_of(all_bars).location;
+	}  
+	
 	reflex escape_reset when: escaping and location distance_to target_dest < 0.5 {
 		target_dest <- goal;
 		escaping <- false;
@@ -308,8 +367,12 @@ species introvert parent: people {
 		}
 	}
 	
+	reflex select_stage {
+		// do nothing
+	}
+	
 	reflex recover when: agent_closest_to(self) distance_to location > 1 {
-		tiredness <- tiredness + 0.1;
+		tiredness <- tiredness - 0.1;
 	}
 	
 	reflex encounter when: agent_closest_to(self) distance_to location < 1 {
@@ -436,13 +499,18 @@ species police parent: people {
 species bartender parent: people {
 	float serving_tolerance <- rnd(2.0, 4.5);
 	float charm_tolerance <- rnd(1.0, 5.0);
-	// trait #3
+	float irritation <- 0.0;
 	
 	bar my_bar <- nil;
 	
 	reflex sell_beer when: !empty(requests) {
 		loop msg over: requests { 
 			agent sender <- agent(msg.sender);
+			
+			
+			if dead(sender) {
+				continue;
+			}
 			
 			switch species_of(sender) {
 				match extrovert {
@@ -480,11 +548,26 @@ species bartender parent: people {
 						;
 					}
 				}
-			}
-			
-				
+				match salesperson {
+					write 'met salesperson';
+					irritation <- irritation + 0.1;
+					
+					if (salesperson(sender).drunkness < serving_tolerance and irritation < 5.0) {
+						do accept_proposal
+							message: msg
+							contents: ['Enjoy, tack!']
+						;
+					} else {
+						do start_conversation
+							to: [sender]
+							protocol: 'fipa-propose'
+							performative: 'inform'
+							contents: ['You are disturbing the other customers! I cannot serve you']
+						;
+					}
+				}
+			}	
 		}
-		
 	}
 	
 	reflex tighten_tolerance when: !empty(informs) { // when asked by police officer
@@ -612,12 +695,19 @@ experiment festival_traffic type: gui {
 	
 	output {
 		display festival_display type: 2d {
+			species stage aspect: base;
+			species bar aspect: base;
 			species extrovert aspect: base;
 			species introvert aspect: base;
 			species police aspect: base;
-			species bar aspect: base;
 			species bartender aspect: base;
 			species salesperson aspect: base;
+		}
+		display "Global Drunkness" {
+			chart "Average Drunkness over time" type: series {
+				data "Avg Drunkness" value: mean((introvert + extrovert + salesperson) collect each.drunkness) color: #blue;
+				data "Max Drunkness" value: max((introvert + extrovert + salesperson) collect each.drunkness) color: #gray;
+			}
 		}
 	}
 }
