@@ -509,7 +509,7 @@ species bartender parent: people {
 	}
 }
 
-species salesperson parent: people skills: [moving, fipa] control: simple_bdi {
+species salesperson parent: people control: simple_bdi {
 
     bool opportunistic_find <- false;
     float risk_averse <- rnd(0.5, 2.5);
@@ -531,15 +531,19 @@ species salesperson parent: people skills: [moving, fipa] control: simple_bdi {
     // --- PERCEPTION STEP ---
     // Instead of reflexes, BDI uses perception to update beliefs
     perceive target: police in: (10.0 * risk_averse) {
-        focus id: "avoid_spolice" truth: true;
-        ask myself {do add_desire(predicate: avoid_police, strength: 10.0); }
-        
+        focus id: "police_nearby" truth: true;        
         }
     
     perceive target: salesperson in: territory_awareness {
-        focus id: "competitor_nearby" truth: true;
-        ask myself { do add_desire(predicate: maintain_teritory, strength: 5.0); }
-    }
+        focus id: "competitor_nearby" truth: true;    }
+    
+    
+    
+    // --- RULES --- Activate desires based on current beliefs
+    rule belief: new_predicate("competitor_nearby") new_desire: maintain_teritory strength: 5.0;
+    rule belief: new_predicate("police_nearby") new_desire: avoid_police strength: 10.0;
+    
+    
 
     // --- PLANS ---
 
